@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, UserCheck, ShieldCheck, LogIn, Mail, Lock, UserPlus, KeyRound, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, LogIn, Mail, Lock, UserPlus, KeyRound, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -11,7 +11,7 @@ import { auth } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
 
 export const AuthModal: React.FC = () => {
-  const { isAuthModalOpen, setIsAuthModalOpen, currentUser, loginAsRole, logout } = useApp();
+  const { isAuthModalOpen, setIsAuthModalOpen, currentUser, loginAsRole, logout, adminEmails } = useApp();
   const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'changePassword'>('login');
   
   const [email, setEmail] = useState('');
@@ -30,20 +30,19 @@ export const AuthModal: React.FC = () => {
     setStatusMsg(null);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      loginAsRole('user');
+      const isAdmin = adminEmails.includes(email.trim().toLowerCase());
+      loginAsRole(isAdmin ? 'admin' : 'user');
       setStatusMsg({ type: 'success', text: 'Đăng nhập thành công!' });
       setTimeout(() => {
         setIsAuthModalOpen(false);
         setStatusMsg(null);
       }, 1000);
     } catch (err: any) {
-      // Demo fallback if Firebase config is using placeholder credentials
-      loginAsRole('user');
-      setStatusMsg({ type: 'success', text: 'Đăng nhập thành công (chế độ demo)!' });
-      setTimeout(() => {
-        setIsAuthModalOpen(false);
-        setStatusMsg(null);
-      }, 1000);
+      // Return authentication error on invalid credentials
+      const msg = err?.code === 'auth/invalid-credential' || err?.code === 'auth/wrong-password' || err?.code === 'auth/user-not-found'
+        ? 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!'
+        : err?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại email và mật khẩu!';
+      setStatusMsg({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }
@@ -58,19 +57,18 @@ export const AuthModal: React.FC = () => {
       if (res.user) {
         await updateProfile(res.user, { displayName: name });
       }
-      loginAsRole('user');
+      const isAdmin = adminEmails.includes(email.trim().toLowerCase());
+      loginAsRole(isAdmin ? 'admin' : 'user');
       setStatusMsg({ type: 'success', text: 'Đăng ký tài khoản mới thành công!' });
       setTimeout(() => {
         setIsAuthModalOpen(false);
         setStatusMsg(null);
       }, 1000);
     } catch (err: any) {
-      loginAsRole('user');
-      setStatusMsg({ type: 'success', text: 'Đăng ký tài khoản mới thành công (chế độ demo)!' });
-      setTimeout(() => {
-        setIsAuthModalOpen(false);
-        setStatusMsg(null);
-      }, 1000);
+      const msg = err?.code === 'auth/email-already-in-use'
+        ? 'Email này đã được đăng ký. Vui lòng chọn đăng nhập!'
+        : err?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin!';
+      setStatusMsg({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }
@@ -385,39 +383,10 @@ export const AuthModal: React.FC = () => {
                   {loading
                     ? 'Đang xử lý...'
                     : mode === 'login'
-                    ? 'Đăng Nhập Firebase'
-                    : 'Tạo Tài Khoản Firebase'}
+                    ? 'Đăng Nhập'
+                    : 'Tạo Tài Khoản'}
                 </button>
               </form>
-
-              {/* Quick Switcher for Admin & User Roles */}
-              <div className="pt-3 border-t border-white/10 space-y-2">
-                <p className="text-center text-[11px] font-medium text-blue-200">
-                  ⚡ Chuyển đổi nhanh phân quyền (Role Switcher):
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
-                      loginAsRole('user');
-                      setIsAuthModalOpen(false);
-                    }}
-                    className="py-2 px-3 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <UserCheck className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Role Học Viên (User)</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      loginAsRole('admin');
-                      setIsAuthModalOpen(false);
-                    }}
-                    className="py-2 px-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-[#fabb15] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Role Quản Trị (Admin)</span>
-                  </button>
-                </div>
-              </div>
 
             </div>
           )}

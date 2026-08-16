@@ -8,6 +8,11 @@ interface AppContextType {
   loginAsRole: (role: UserRole) => void;
   logout: () => void;
   
+  // Admin Management
+  adminEmails: string[];
+  addAdminEmail: (email: string) => void;
+  removeAdminEmail: (email: string) => void;
+  
   // Videos & Lessons
   lessons: VideoLesson[];
   addLesson: (lesson: Omit<VideoLesson, 'id'>) => void;
@@ -96,7 +101,11 @@ const initialComments: Comment[] = [
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(DEMO_USER);
+  const [currentUser, setCurrentUser] = useState<User | null>(null); // Default guest state for production
+  const [adminEmails, setAdminEmails] = useState<string[]>([
+    'ytbmmadmin@youtubemakemoneyww.com',
+    'admin@youtubemakemoneyww.com'
+  ]);
   const [lessons, setLessons] = useState<VideoLesson[]>(initialLessons);
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [purchasedLessonIds, setPurchasedLessonIds] = useState<string[]>([]);
@@ -107,6 +116,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState<boolean>(false);
   const [activeLesson, setActiveLesson] = useState<VideoLesson | null>(null);
   const [activePayPalLesson, setActivePayPalLesson] = useState<VideoLesson | null>(null);
+
+  const addAdminEmail = (email: string) => {
+    const formatted = email.trim().toLowerCase();
+    if (formatted && !adminEmails.includes(formatted)) {
+      setAdminEmails((prev) => [...prev, formatted]);
+    }
+  };
+
+  const removeAdminEmail = (email: string) => {
+    const formatted = email.trim().toLowerCase();
+    // Super admin ytbmmadmin@youtubemakemoneyww.com cannot be removed
+    if (formatted === 'ytbmmadmin@youtubemakemoneyww.com') return;
+    setAdminEmails((prev) => prev.filter((e) => e !== formatted));
+  };
 
   const loginAsRole = (role: UserRole) => {
     if (role === 'admin') {
@@ -209,6 +232,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser,
         loginAsRole,
         logout,
+        adminEmails,
+        addAdminEmail,
+        removeAdminEmail,
         lessons,
         addLesson,
         deleteLesson,

@@ -2,13 +2,13 @@ import type { LandingData } from '../types/landing';
 
 export const landingData: LandingData = {
   meta: {
-    title: "SAR0 ACADEMY - KHÓA HỌC SẢN XUẤT THỰC CHIẾN VÀ XÂY DỰNG VIDEO TRÊN NỀN TẢNG YOUTUBE",
-    description: "Hơn 100+ videos thực chiến xây dựng kênh YouTube, Facebook, TikTok bởi SAR0.",
+    title: "YMM ACADEMY - KHÓA HỌC SẢN XUẤT THỰC CHIẾN VÀ XÂY DỰNG VIDEO TRÊN NỀN TẢNG YOUTUBE",
+    description: "Hơn 100+ videos thực chiến xây dựng kênh YouTube, Facebook, TikTok bởi YMM.",
   },
   navigation: {
     channels: [
       { id: "ds_khoahoc", label: "Danh Sách Khóa Học", href: "#ds_khoahoc", color: "#FABB15" },
-      { id: "la_ai", label: "SAR0 là ai ?", href: "#la_ai", color: "#FABB15" },
+      { id: "la_ai", label: "YMM là ai ?", href: "#la_ai", color: "#FABB15" },
       { id: "module", label: "Nội Dung Học", href: "#module", color: "#FABB15" },
       { id: "loiich", label: "Lợi Ích", href: "#loiich", color: "#FABB15" },
       { id: "quyenloi", label: "Quyền Lợi", href: "#quyenloi", color: "#FABB15" },
@@ -35,7 +35,7 @@ export const landingData: LandingData = {
     highlightBanner: "Học viên sẽ được hướng dẫn từng bước từ chọn chủ đề, phân tích kênh đối thủ, sản xuất video, tối ưu tiêu đề, thumbnail, đăng tải và phát triển kênh.",
     authorCard: {
       label: "Khóa học được hướng dẫn trực tiếp bởi:",
-      name: "SAR0",
+      name: "YMM",
       tagline: "Chuyên Gia Sản Xuất Video & Xây Kênh Đa Nền Tảng",
       achievements: [
         { id: 1, text: "Nhà sáng tạo nội dung YouTube thực chiến từ năm 2019" },
@@ -54,10 +54,10 @@ export const landingData: LandingData = {
       { icon: "Cpu", title: "Không cần", subtitle: "thiết bị phức tạp" },
       { icon: "Zap", title: "Không cần", subtitle: "kinh nghiệm từ trước" },
     ],
-    launchNote: "Chúc mừng bạn đã đến với SAR0 Academy. Khóa học vừa ra mắt phiên bản cập nhật 2026 mới nhất!",
+    launchNote: "Chúc mừng bạn đã đến với YMM Academy. Khóa học vừa ra mắt phiên bản cập nhật 2026 mới nhất!",
   },
   marquee: [
-    "SAR0 ACADEMY",
+    "YMM ACADEMY",
     "YouTube Shorts",
     "Facebook Reels",
     "TikTok Viral",
@@ -218,8 +218,8 @@ export const landingData: LandingData = {
     ],
   },
   curriculum: {
-    badge: "Khóa học của SAR0 Academy",
-    titleLine1: "Khóa học của SAR0 Academy",
+    badge: "Khóa học của YMM Academy",
+    titleLine1: "Khóa học của YMM Academy",
     titleLine2: "Sẽ dạy bạn những gì?",
     description: "Khóa học gồm hơn 100 video bài học thực chiến, hướng dẫn từng bước cách sản xuất video và xây dựng kênh đa nền tảng.",
     pointsHeader: "Nội dung chính bao gồm:",
@@ -301,14 +301,14 @@ export const landingData: LandingData = {
       },
       {
         number: "02",
-        title: "Cộng đồng học viên SAR0 Academy",
+        title: "Cộng đồng học viên YMM Academy",
         description: "Được tham gia để giao lưu, học hỏi và kết nối trực tiếp cùng các học viên khác.",
         imageUrl: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=600&q=80",
       },
       {
         number: "03",
         title: "Hỗ trợ giải đáp thắc mắc",
-        description: "Trong quá trình học thông qua cộng đồng, các buổi trao đổi hoặc hình thức hỗ trợ trực tiếp từ mentor SAR0.",
+        description: "Trong quá trình học thông qua cộng đồng, các buổi trao đổi hoặc hình thức hỗ trợ trực tiếp từ mentor YMM.",
         imageUrl: "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=600&q=80",
       },
       {
@@ -327,8 +327,8 @@ export const landingData: LandingData = {
   },
   author: {
     sectionId: "la_ai",
-    name: "SAR0",
-    nickname: "SAR0 Academy Founder",
+    name: "YMM",
+    nickname: "YMM Academy Founder",
     bio: "Nhà sáng tạo nội dung từ năm 2019 với kinh nghiệm thực chiến phát triển hàng chục kênh nội dung trên YouTube, Facebook & TikTok đạt hàng trăm triệu lượt xem.",
     stats: [
       { label: "Kinh nghiệm", value: "6+ Năm" },
@@ -366,7 +366,7 @@ export const landingData: LandingData = {
       {
         id: "faq-4",
         question: "Trong quá trình học nếu tôi có thắc mắc thì hỏi ai?",
-        answer: "Bạn sẽ được tham gia Cộng đồng học viên độc quyền của SAR0 Academy. Tại đây đội ngũ mentor và tác giả SAR0 sẽ hỗ trợ giải đáp trực tiếp các câu hỏi của bạn.",
+        answer: "Bạn sẽ được tham gia Cộng đồng học viên độc quyền của YMM Academy. Tại đây đội ngũ mentor và tác giả YMM sẽ hỗ trợ giải đáp trực tiếp các câu hỏi của bạn.",
       },
       {
         id: "faq-5",

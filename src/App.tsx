@@ -41,7 +41,7 @@ export function AppContent() {
         {/* Member Privileges 01-05 */}
         <PrivilegesSection />
 
-        {/* Author & Instructor Bio (SAR0) */}
+        {/* Author & Instructor Bio (YMM) */}
         <AuthorSection />
 
         {/* FAQs Accordion */}

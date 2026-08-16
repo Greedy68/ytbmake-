@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, MessageSquare, Video, CheckCircle2, Trash2, ShieldAlert, PlusCircle, Clock, DollarSign } from 'lucide-react';
+import { X, Upload, MessageSquare, Video, CheckCircle2, Trash2, ShieldAlert, PlusCircle, Clock, DollarSign, UserCheck, UserPlus, Shield } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { CommentStatus } from '../../types/app';
 
@@ -8,6 +8,9 @@ export const AdminDashboardModal: React.FC = () => {
     isAdminDashboardOpen,
     setIsAdminDashboardOpen,
     currentUser,
+    adminEmails,
+    addAdminEmail,
+    removeAdminEmail,
     lessons,
     addLesson,
     deleteLesson,
@@ -17,7 +20,7 @@ export const AdminDashboardModal: React.FC = () => {
     deleteComment,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'upload' | 'comments'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'comments' | 'admins'>('upload');
   const [commentFilter, setCommentFilter] = useState<CommentStatus | 'all'>('pending');
 
   // New Lesson Form State
@@ -29,6 +32,10 @@ export const AdminDashboardModal: React.FC = () => {
   const [isFreePreview, setIsFreePreview] = useState(false);
   const [price, setPrice] = useState(19.99);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // New Admin Email Form State
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [adminSuccessMsg, setAdminSuccessMsg] = useState('');
 
   if (!isAdminDashboardOpen) return null;
 
@@ -70,6 +77,16 @@ export const AdminDashboardModal: React.FC = () => {
     setTimeout(() => setSuccessMessage(''), 3500);
   };
 
+  const handleAddAdmin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminEmail.trim()) return;
+
+    addAdminEmail(newAdminEmail.trim());
+    setAdminSuccessMsg(`Đã cấp quyền Admin thành công cho email: ${newAdminEmail.trim()}`);
+    setNewAdminEmail('');
+    setTimeout(() => setAdminSuccessMsg(''), 4000);
+  };
+
   const filteredComments = comments.filter((c) => {
     if (commentFilter === 'all') return true;
     return c.status === commentFilter;
@@ -89,7 +106,7 @@ export const AdminDashboardModal: React.FC = () => {
             </span>
             <div>
               <h3 className="font-bold text-base text-white">Bảng Quản Trị Admin</h3>
-              <p className="text-[11px] text-blue-200">Quản lý upload video bài học & duyệt bình luận học viên</p>
+              <p className="text-[11px] text-blue-200">Quản lý upload video, duyệt bình luận & cấp quyền Admin</p>
             </div>
           </div>
 
@@ -102,10 +119,10 @@ export const AdminDashboardModal: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-white/10 bg-black/20 flex-shrink-0 px-4 pt-3 gap-2">
+        <div className="flex border-b border-white/10 bg-black/20 flex-shrink-0 px-4 pt-3 gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('upload')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all flex-shrink-0 ${
               activeTab === 'upload'
                 ? 'bg-[#001848] text-[#fabb15] border-t-2 border-x border-[#fabb15]'
                 : 'text-gray-400 hover:text-white'
@@ -117,7 +134,7 @@ export const AdminDashboardModal: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('comments')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all flex-shrink-0 ${
               activeTab === 'comments'
                 ? 'bg-[#001848] text-[#fabb15] border-t-2 border-x border-[#fabb15]'
                 : 'text-gray-400 hover:text-white'
@@ -130,6 +147,18 @@ export const AdminDashboardModal: React.FC = () => {
                 {pendingCount}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('admins')}
+            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all flex-shrink-0 ${
+              activeTab === 'admins'
+                ? 'bg-[#001848] text-[#fabb15] border-t-2 border-x border-[#fabb15]'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Shield className="w-4 h-4" />
+            <span>Quản Lý Admin ({adminEmails.length})</span>
           </button>
         </div>
 
@@ -401,6 +430,92 @@ export const AdminDashboardModal: React.FC = () => {
                     </div>
                   ))
                 )}
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 3: ADMIN MANAGEMENT */}
+          {activeTab === 'admins' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Form Add Admin Email */}
+              <div className="lg:col-span-5 bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4">
+                <h4 className="text-sm font-bold text-[#fabb15] flex items-center gap-2 border-b border-white/10 pb-3">
+                  <UserPlus className="w-4 h-4" />
+                  <span>Cấp Quyền Admin Mới</span>
+                </h4>
+
+                {adminSuccessMsg && (
+                  <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                    <span>{adminSuccessMsg}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleAddAdmin} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-gray-300 font-semibold mb-1">Email Tài Khoản Admin Mới</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="admin2@youtubemakemoneyww.com"
+                      value={newAdminEmail}
+                      onChange={(e) => setNewAdminEmail(e.target.value)}
+                      className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#fabb15]"
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-blue-200">
+                    💡 Khi email này đăng nhập vào hệ thống, tài khoản sẽ tự động được trao quyền Quản Trị (Admin).
+                  </p>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-[#fabb15] hover:bg-amber-400 text-[#001848] font-bold rounded-xl shadow-lg transition-colors mt-2"
+                  >
+                    Xác Nhận Cấp Quyền Admin
+                  </button>
+                </form>
+              </div>
+
+              {/* Authorized Admins List */}
+              <div className="lg:col-span-7 bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4">
+                <h4 className="text-sm font-bold text-white flex items-center justify-between border-b border-white/10 pb-3">
+                  <span>Danh Sách Email Có Quyền Admin ({adminEmails.length})</span>
+                  <span className="text-xs text-blue-200 font-normal">Quản lý quyền hạn</span>
+                </h4>
+
+                <div className="space-y-3">
+                  {adminEmails.map((email) => (
+                    <div
+                      key={email}
+                      className="p-3.5 bg-black/20 rounded-xl border border-white/10 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <UserCheck className="w-4 h-4 text-[#fabb15]" />
+                        <div>
+                          <h5 className="text-xs font-bold text-white">{email}</h5>
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase">Role: Admin</span>
+                        </div>
+                      </div>
+
+                      {email !== 'ytbmmadmin@youtubemakemoneyww.com' && email !== 'admin@midas.com' ? (
+                        <button
+                          onClick={() => removeAdminEmail(email)}
+                          className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Hủy quyền Admin"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-amber-300 font-bold px-2 py-1 bg-amber-500/20 rounded-lg border border-amber-500/40">
+                          Super Admin
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
             </div>

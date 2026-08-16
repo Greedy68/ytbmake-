@@ -63,7 +63,7 @@ export const CurriculumSection: React.FC = () => {
             <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white group">
               <img
                 src={curriculum.imageUrl}
-                alt="Nội dung khóa học DGMD"
+                alt="Nội dung khóa học YMM"
                 className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#001848]/90 via-transparent to-transparent flex items-end p-6">

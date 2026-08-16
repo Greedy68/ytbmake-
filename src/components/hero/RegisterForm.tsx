@@ -1,29 +1,72 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff, ShieldCheck, Zap, Sparkles, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Zap, Sparkles, CheckCircle2, Flame, Clock } from 'lucide-react';
 import { landingData } from '../../data/landingData';
+import { useApp } from '../../context/AppContext';
+
+const FLASH_SALE_KEY = 'ymm_flash_sale_end_time';
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const RegisterForm: React.FC = () => {
+  const { setIsAuthModalOpen } = useApp();
   const [activeTab, setActiveTab] = useState<'register' | 'login'>('register');
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [passwordRepeat, setPasswordRepeat] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) return;
-    setIsSubmitted(true);
-    setTimeout(() => {
-      alert(`[Demo Clone] Đăng ký thành công tài khoản: ${email}`);
-      setIsSubmitted(false);
-    }, 800);
-  };
+  // 30-Day Countdown Timer State
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number }>({
+    days: 30,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
+
+  useEffect(() => {
+    const getOrSetEndTime = () => {
+      const stored = localStorage.getItem(FLASH_SALE_KEY);
+      let endTime = stored ? parseInt(stored, 10) : 0;
+      const now = Date.now();
+
+      if (!endTime || now >= endTime) {
+        endTime = now + THIRTY_DAYS_MS;
+        localStorage.setItem(FLASH_SALE_KEY, endTime.toString());
+      }
+      return endTime;
+    };
+
+    let targetEndTime = getOrSetEndTime();
+
+    const updateTimer = () => {
+      const now = Date.now();
+      let diff = targetEndTime - now;
+
+      // Auto-reset when 30 days complete
+      if (diff <= 0) {
+        targetEndTime = now + THIRTY_DAYS_MS;
+        localStorage.setItem(FLASH_SALE_KEY, targetEndTime.toString());
+        diff = THIRTY_DAYS_MS;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      const minutes = Math.floor((diff / (1000 * 60)) % 60);
+      const seconds = Math.floor((diff / 1000) % 60);
+
+      setTimeLeft({ days, hours, minutes, seconds });
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const { registration } = landingData;
+  const padZero = (num: number) => num.toString().padStart(2, '0');
+
+  const handleOpenAuthModal = () => {
+    setIsAuthModalOpen(true);
+  };
 
   return (
-    <div id="register" className="w-full max-w-md mx-auto bg-[#001848]/90 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl overflow-hidden p-6 sm:p-8 text-white relative group">
+    <div id="register" className="w-full max-w-md mx-auto bg-[#001848]/95 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl overflow-hidden p-6 sm:p-8 text-white relative group">
       {/* Decorative Glow */}
       <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#06aef6]/30 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-[#fabb15]/20 rounded-full blur-3xl pointer-events-none" />
@@ -71,8 +114,8 @@ export const RegisterForm: React.FC = () => {
       {/* Google Login Button */}
       <button
         type="button"
-        onClick={() => alert('[Demo Clone] Đăng nhập Google đã khởi chạy')}
-        className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-white text-gray-800 font-semibold text-sm hover:bg-gray-100 transition-all shadow-md active:scale-98 mb-5 cursor-pointer"
+        onClick={handleOpenAuthModal}
+        className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl bg-white hover:bg-gray-100 text-gray-800 font-bold text-sm transition-all shadow-md active:scale-98 mb-5 cursor-pointer"
       >
         <svg className="w-5 h-5" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -87,7 +130,10 @@ export const RegisterForm: React.FC = () => {
       <div className="flex bg-white/10 rounded-xl p-1 mb-5">
         <button
           type="button"
-          onClick={() => setActiveTab('register')}
+          onClick={() => {
+            setActiveTab('register');
+            handleOpenAuthModal();
+          }}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'register' ? 'bg-[#fabb15] text-[#001848] shadow-md' : 'text-gray-300 hover:text-white'
           }`}
@@ -96,7 +142,10 @@ export const RegisterForm: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('login')}
+          onClick={() => {
+            setActiveTab('login');
+            handleOpenAuthModal();
+          }}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'login' ? 'bg-[#fabb15] text-[#001848] shadow-md' : 'text-gray-300 hover:text-white'
           }`}
@@ -105,71 +154,70 @@ export const RegisterForm: React.FC = () => {
         </button>
       </div>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-xs text-center text-emerald-300 font-semibold">
-          ✨ Không có thêm bước nào cả. <span className="underline">Đăng ký là xem được ngay!</span>
-        </p>
+      <p className="text-xs text-center text-emerald-300 font-semibold mb-4">
+        ✨ Không có thêm bước nào cả. <button type="button" onClick={handleOpenAuthModal} className="underline cursor-pointer">Đăng ký là xem được ngay!</button>
+      </p>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">Email</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="nhapemailcuaban@gmail.com"
-            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-[#fabb15] text-sm transition-colors"
-          />
+      {/* 30-Day Flash Sale Countdown Timer Box - Moved Directly Above Red Button */}
+      <div className="mb-5 bg-gradient-to-r from-amber-500/25 via-yellow-500/35 to-amber-500/25 p-4 rounded-2xl border border-amber-400/60 shadow-xl shadow-amber-500/10 text-center animate-fade-in">
+        <div className="flex items-center justify-center gap-2 mb-2.5">
+          <Flame className="w-5 h-5 text-[#fabb15] animate-bounce" />
+          <h4 className="text-xs sm:text-sm font-black text-[#fabb15] uppercase tracking-wider">
+            Ưu đãi Flash sale kết thúc sau:
+          </h4>
+          <Clock className="w-4 h-4 text-[#fabb15]" />
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-300 mb-1">Mật khẩu</label>
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-[#fabb15] text-sm transition-colors pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
+        {/* Timer Numbers Grid */}
+        <div className="flex items-center justify-center gap-2 text-center">
+          <div className="bg-gradient-to-b from-[#002b70] to-[#00143d] border border-amber-400/50 rounded-xl px-2.5 py-1.5 min-w-[58px] shadow-md">
+            <span className="font-impact text-xl sm:text-2xl text-[#fabb15] block tracking-wide">
+              {padZero(timeLeft.days)}
+            </span>
+            <span className="text-[9px] font-extrabold uppercase text-blue-200 block -mt-1">Ngày</span>
+          </div>
+
+          <span className="font-impact text-xl text-[#fabb15] animate-pulse">:</span>
+
+          <div className="bg-gradient-to-b from-[#002b70] to-[#00143d] border border-amber-400/50 rounded-xl px-2.5 py-1.5 min-w-[54px] shadow-md">
+            <span className="font-impact text-xl sm:text-2xl text-white block tracking-wide">
+              {padZero(timeLeft.hours)}
+            </span>
+            <span className="text-[9px] font-extrabold uppercase text-blue-200 block -mt-1">Giờ</span>
+          </div>
+
+          <span className="font-impact text-xl text-[#fabb15] animate-pulse">:</span>
+
+          <div className="bg-gradient-to-b from-[#002b70] to-[#00143d] border border-amber-400/50 rounded-xl px-2.5 py-1.5 min-w-[54px] shadow-md">
+            <span className="font-impact text-xl sm:text-2xl text-white block tracking-wide">
+              {padZero(timeLeft.minutes)}
+            </span>
+            <span className="text-[9px] font-extrabold uppercase text-blue-200 block -mt-1">Phút</span>
+          </div>
+
+          <span className="font-impact text-xl text-[#fabb15] animate-pulse">:</span>
+
+          <div className="bg-gradient-to-b from-[#002b70] to-[#00143d] border border-amber-400/50 rounded-xl px-2.5 py-1.5 min-w-[54px] shadow-md">
+            <span className="font-impact text-xl sm:text-2xl text-amber-400 block tracking-wide">
+              {padZero(timeLeft.seconds)}
+            </span>
+            <span className="text-[9px] font-extrabold uppercase text-blue-200 block -mt-1">Giây</span>
           </div>
         </div>
+      </div>
 
-        {activeTab === 'register' && (
-          <div>
-            <label className="block text-xs font-semibold text-gray-300 mb-1">Xác nhận mật khẩu</label>
-            <input
-              type="password"
-              required
-              value={passwordRepeat}
-              onChange={(e) => setPasswordRepeat(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-[#fabb15] text-sm transition-colors"
-            />
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={isSubmitted}
-          className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-[#ce1211] via-red-600 to-[#ce1211] text-white font-extrabold text-base shadow-xl shadow-red-900/40 hover:shadow-2xl hover:scale-102 active:scale-98 transition-all flex flex-col items-center justify-center gap-0.5 border border-red-400/30 cursor-pointer mt-2"
-        >
-          <span className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-[#fabb15]" />
-            {activeTab === 'register' ? 'ĐĂNG KÝ HỌC THỬ NGAY' : 'ĐĂNG NHẬP HỌC NGAY'}
-          </span>
-          <span className="text-[11px] font-normal text-amber-200">Hoàn toàn MIỄN PHÍ | Hiệu quả cao</span>
-        </button>
-      </form>
+      {/* Main Red Call-To-Action Button -> Triggers Popup Modal */}
+      <button
+        type="button"
+        onClick={handleOpenAuthModal}
+        className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-[#ce1211] via-red-600 to-[#ce1211] text-white font-extrabold text-base shadow-xl shadow-red-900/40 hover:shadow-2xl hover:scale-102 active:scale-98 transition-all flex flex-col items-center justify-center gap-0.5 border border-red-400/30 cursor-pointer"
+      >
+        <span className="flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-[#fabb15]" />
+          <span>ĐĂNG KÝ HỌC THỬ NGAY</span>
+        </span>
+        <span className="text-[11px] font-normal text-amber-200">Hoàn toàn MIỄN PHÍ | Hiệu quả cao</span>
+      </button>
 
       {/* Launch Note */}
       <div className="mt-5 pt-4 border-t border-white/10 text-center">

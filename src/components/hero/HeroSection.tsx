@@ -47,18 +47,18 @@ export const HeroSection: React.FC = () => {
               </h1>
             </div>
 
-            {/* Feature List Box */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 space-y-4">
-              <p className="text-sm font-medium text-blue-200">
+            {/* Feature List Box - Matches User Screenshot */}
+            <div className="bg-gradient-to-br from-[#003685]/80 via-[#002663]/90 to-[#001848] backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-blue-400/35 shadow-2xl space-y-6 hover:border-[#fabb15]/60 transition-all duration-300 group">
+              <p className="text-base sm:text-lg font-bold text-blue-200 tracking-wide">
                 {hero.boxHeader}
               </p>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {hero.features.map((feat) => (
-                  <div key={feat.id} className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#06aef6]/20 flex items-center justify-center flex-shrink-0 mt-0.5 border border-[#06aef6]/40">
-                      <Play className="w-4 h-4 text-[#fabb15] fill-[#fabb15]" />
+                  <div key={feat.id} className="flex items-center gap-4 group/item">
+                    <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-[#06aef6] to-[#0052cc] flex items-center justify-center flex-shrink-0 border-2 border-blue-300 shadow-lg shadow-blue-500/40 group-hover/item:scale-110 transition-transform">
+                      <Play className="w-4 h-4 sm:w-5 sm:h-5 text-[#fabb15] fill-[#fabb15] ml-0.5" />
                     </div>
-                    <span className="text-sm sm:text-base font-semibold text-white leading-snug">
+                    <span className="text-base sm:text-lg font-bold text-white leading-snug group-hover/item:text-[#fabb15] transition-colors">
                       {feat.title}
                     </span>
                   </div>
@@ -66,18 +66,18 @@ export const HeroSection: React.FC = () => {
               </div>
             </div>
 
-            {/* Target Audience List */}
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-300">
+            {/* Target Audience List - Matches User Screenshot */}
+            <div className="space-y-4 pt-2">
+              <p className="text-base sm:text-lg font-bold text-white tracking-wide">
                 {hero.audienceHeader}
               </p>
-              <div className="space-y-2.5">
+              <div className="space-y-3.5">
                 {hero.audienceList.map((aud) => (
-                  <div key={aud.id} className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-500/30">
-                      <Check className="w-4 h-4 text-white stroke-[3]" />
+                  <div key={aud.id} className="flex items-center gap-4 bg-white/5 hover:bg-white/10 p-3.5 sm:p-4 rounded-2xl border border-white/10 transition-all group/aud">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-[#00e676] to-[#00a843] flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/40 group-hover/aud:scale-110 transition-transform">
+                      <Check className="w-5 h-5 text-white stroke-[3]" />
                     </div>
-                    <span className="text-sm sm:text-base font-medium text-gray-100">
+                    <span className="text-base sm:text-lg font-bold text-gray-100 group-hover/aud:text-white transition-colors">
                       {aud.text}
                     </span>
                   </div>
