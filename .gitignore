@@ -20,6 +20,10 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 
+# Local-only documentation
+*.md
+*.MD
+
 # Local credentials and private keys
 *service-account*.json
 *service_account*.json
