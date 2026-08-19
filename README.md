@@ -1,4 +1,4 @@
-# YMM Academy
+# ytbmakemoney
 
 Ứng dụng React/Vite sử dụng Firebase Authentication làm nguồn xác thực duy nhất và Cloud Firestore làm nguồn dữ liệu dùng chung cho hồ sơ, quyền và metadata video.
 
@@ -39,11 +39,11 @@ Rules tests dùng demo project và Emulator Suite, không đọc/ghi production.
 
 ```bash
 gcloud auth application-default login
-GOOGLE_CLOUD_PROJECT=ymm-academy npm run bootstrap:admin -- --email owner@example.com --dry-run
-GOOGLE_CLOUD_PROJECT=ymm-academy npm run bootstrap:admin -- --email owner@example.com
+GOOGLE_CLOUD_PROJECT=ymm-academy npm run bootstrap:admin -- --email owner@example.com --root --dry-run
+GOOGLE_CLOUD_PROJECT=ymm-academy npm run bootstrap:admin -- --email owner@example.com --root
 ```
 
-Có thể dùng `--uid UID` thay `--email`. Lệnh thật yêu cầu nhập `PROMOTE`. Rules chặn admin tự hạ quyền chính mình, nhưng Firestore Rules không thể đếm admin toàn collection một cách nguyên tử; việc bảo toàn admin cuối cùng phải được đảm bảo bằng quy trình vận hành/bootstrap.
+Có thể dùng `--uid UID` thay `--email`. Lệnh thật yêu cầu nhập `PROMOTE`. `--root` lưu UID vào `system/security`; Rules chặn mọi admin khác thay đổi role/status của root-admin. Firebase project owners và Admin SDK vẫn có thể bỏ qua Security Rules, vì vậy phải giới hạn IAM/ADC ở cấp project.
 
 ## Theo dõi quota
 

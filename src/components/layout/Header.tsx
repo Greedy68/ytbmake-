@@ -25,7 +25,7 @@ export const Header: React.FC<HeaderProps> = ({ channels }) => {
                 <PlayCircle className="w-6 h-6 text-white" />
               </div>
               <div className="flex flex-col">
-                <span className="font-impact text-2xl tracking-wider text-white">YMM<span className="text-[#fabb15]">.ACADEMY</span></span>
+                <span className="font-impact text-2xl tracking-wider text-white">YTB<span className="text-[#fabb15]">MAKEMONEY</span></span>
                 <span className="text-[10px] text-blue-200 tracking-widest uppercase font-semibold">Học Làm Video Thực Chiến</span>
               </div>
             </a>

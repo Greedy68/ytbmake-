@@ -26,7 +26,7 @@ function toUser(uid: string, data: Record<string, unknown>): User {
     name: String(data.displayName ?? 'Học viên'),
     role: data.role === 'admin' ? 'admin' : 'user',
     status: data.status === 'disabled' ? 'disabled' : 'active',
-    avatar: DEFAULT_AVATAR,
+    avatar: typeof data.photoURL === 'string' && data.photoURL ? data.photoURL : DEFAULT_AVATAR,
     purchasedLessonIds: [],
   };
 }
@@ -39,6 +39,7 @@ export async function ensureUserProfile(firebaseUser: FirebaseUser, displayName?
       transaction.set(ref, {
         email: firebaseUser.email ?? '',
         displayName: displayName?.trim() || firebaseUser.displayName || 'Học viên',
+        photoURL: firebaseUser.photoURL ?? null,
         role: 'user',
         status: 'active',
         createdAt: serverTimestamp(),

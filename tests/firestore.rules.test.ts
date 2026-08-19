@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, it } from 'vitest';
 
 let env: RulesTestEnvironment;
 const now = Timestamp.now();
-const user = (role = 'user') => ({ email: `${role}@example.com`, displayName: role, role, status: 'active', createdAt: now, updatedAt: now });
+const user = (role = 'user') => ({ email: `${role}@example.com`, displayName: role, photoURL: null, role, status: 'active', createdAt: now, updatedAt: now });
 const media = (visibility = 'public', status = 'published') => ({
   type: 'video', title: 'Valid video', description: '', sourceType: 'unset', sourceUrl: null, sourcePath: null,
   thumbnailUrl: '', visibility, status, createdBy: 'admin', createdAt: now, updatedAt: now,
@@ -21,7 +21,9 @@ afterAll(async () => env.cleanup());
 async function seed() {
   await env.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'users/admin'), user('admin'));
+    await setDoc(doc(context.firestore(), 'users/operator'), { ...user('admin'), email: 'operator@example.com' });
     await setDoc(doc(context.firestore(), 'users/member'), user());
+    await setDoc(doc(context.firestore(), 'system/security'), { rootAdminUid: 'admin', updatedAt: now });
     await setDoc(doc(context.firestore(), 'media/public'), media());
     await setDoc(doc(context.firestore(), 'media/auth'), media('authenticated'));
     await setDoc(doc(context.firestore(), 'media/private'), media('private', 'draft'));
@@ -44,6 +46,14 @@ describe('users rules', () => {
     await assertSucceeds(updateDoc(doc(db, 'users/member'), { role: 'admin', updatedAt: serverTimestamp() }));
     await assertFails(updateDoc(doc(db, 'users/admin'), { role: 'user', updatedAt: serverTimestamp() }));
     await assertSucceeds(getDocs(query(collection(db, 'users'), limit(50))));
+  });
+  it('prevents every other admin from changing root-admin access', async () => {
+    await seed();
+    const operator = env.authenticatedContext('operator').firestore();
+    const root = env.authenticatedContext('admin').firestore();
+    await assertFails(updateDoc(doc(operator, 'users/admin'), { role: 'user', updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(operator, 'users/admin'), { status: 'disabled', updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(root, 'users/operator'), { role: 'user', updatedAt: serverTimestamp() }));
   });
 });
 

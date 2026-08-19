@@ -13,7 +13,7 @@ export const Footer: React.FC = () => {
               <PlayCircle className="w-6 h-6 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="font-impact text-2xl tracking-wider text-white">YMM<span className="text-[#fabb15]">.ACADEMY</span></span>
+              <span className="font-impact text-2xl tracking-wider text-white">YTB<span className="text-[#fabb15]">MAKEMONEY</span></span>
               <span className="text-[10px] text-blue-200 tracking-widest uppercase font-semibold">Học Làm Video Thực Chiến</span>
             </div>
           </a>
@@ -32,7 +32,7 @@ export const Footer: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
           <p className="flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>© 2026 YMM.academy — Bản quyền thuộc về YMM Media. All rights reserved.</span>
+            <span>© 2026 ytbmakemoney — All rights reserved.</span>
           </p>
           <p className="flex items-center gap-1">
             Built with <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500" /> by <span className="text-white font-bold">Midas</span>

@@ -1,10 +1,15 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
   EmailAuthProvider,
+  FacebookAuthProvider,
+  GoogleAuthProvider,
+  getRedirectResult,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   reauthenticateWithCredential,
   sendPasswordResetEmail,
+  signInWithPopup,
+  signInWithRedirect,
   signInWithEmailAndPassword,
   signOut,
   updatePassword,
@@ -30,6 +35,8 @@ interface AppContextType {
   authError: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  signInWithSocial: (provider: 'google' | 'facebook') => Promise<void>;
+  hasPasswordProvider: boolean;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
@@ -68,10 +75,18 @@ function friendlyError(error: unknown): string {
   const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
   const messages: Record<string, string> = {
     'auth/invalid-credential': 'Email hoặc mật khẩu không chính xác.',
+    'auth/wrong-password': 'Mật khẩu hiện tại không chính xác.',
     'auth/email-already-in-use': 'Email này đã được đăng ký.',
     'auth/invalid-email': 'Địa chỉ email không hợp lệ.',
     'auth/weak-password': 'Mật khẩu chưa đủ mạnh.',
     'auth/too-many-requests': 'Có quá nhiều yêu cầu. Vui lòng thử lại sau.',
+    'auth/popup-closed-by-user': 'Bạn đã đóng cửa sổ đăng nhập.',
+    'auth/cancelled-popup-request': 'Yêu cầu đăng nhập đã bị hủy.',
+    'auth/network-request-failed': 'Không thể kết nối dịch vụ đăng nhập. Vui lòng kiểm tra mạng.',
+    'auth/operation-not-allowed': 'Phương thức đăng nhập này chưa được bật.',
+    'auth/account-exists-with-different-credential': 'Email này đã được đăng ký bằng một phương thức khác. Vui lòng đăng nhập bằng phương thức trước đó, sau đó liên kết tài khoản trong phần cài đặt.',
+    'auth/credential-already-in-use': 'Thông tin đăng nhập này đã được liên kết với một tài khoản khác.',
+    'auth/requires-recent-login': 'Phiên đăng nhập đã quá hạn. Vui lòng đăng nhập lại rồi thử lại.',
   };
   return messages[code] ?? 'Không thể hoàn tất yêu cầu. Vui lòng thử lại.';
 }
@@ -142,6 +157,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => {
+    void getRedirectResult(auth).catch((error) => setAuthError(friendlyError(error)));
+  }, []);
+
+  useEffect(() => {
     if (!authLoading) void reloadMedia();
   }, [authLoading, reloadMedia]);
 
@@ -165,6 +184,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (accountCreated) {
         await signOut(auth);
         throw new Error('Tài khoản Firebase đã được tạo nhưng hồ sơ chưa lưu được. Hãy đăng nhập lại để hệ thống thử khôi phục hồ sơ.');
+      }
+      throw new Error(friendlyError(error));
+    }
+  };
+
+  const signInWithSocial = async (providerName: 'google' | 'facebook') => {
+    const provider = providerName === 'google' ? new GoogleAuthProvider() : new FacebookAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const prefersRedirect = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    try {
+      if (prefersRedirect) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      const credential = await signInWithPopup(auth, provider);
+      const profile = await ensureUserProfile(credential.user);
+      if (profile.status === 'disabled') {
+        await signOut(auth);
+        throw new Error('Tài khoản đã bị vô hiệu hóa.');
+      }
+      setCurrentUser(profile);
+    } catch (error) {
+      const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+      if (code === 'auth/popup-blocked') {
+        await signInWithRedirect(auth, provider);
+        return;
       }
       throw new Error(friendlyError(error));
     }
@@ -235,8 +280,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const hasAccessToLesson = (lesson: VideoLesson) => lesson.visibility === 'public'
     || lesson.isFreePreview || currentUser?.role === 'admin' || purchasedLessonIds.includes(lesson.id);
 
+  const hasPasswordProvider = Boolean(auth.currentUser?.providerData.some((provider) => provider.providerId === 'password'));
+
   return <AppContext.Provider value={{
-    currentUser, authLoading, authError, login, register, logout, changePassword, requestPasswordReset,
+    currentUser, authLoading, authError, login, register, signInWithSocial, hasPasswordProvider, logout, changePassword, requestPasswordReset,
     users, loadUsers, setUserAccess, lessons, mediaLoading, mediaError, reloadMedia, addLesson, editLesson, deleteLesson,
     comments, addComment, approveComment, rejectComment, deleteComment, purchasedLessonIds, orders,
     processPayPalPayment, hasAccessToLesson, isAuthModalOpen, setIsAuthModalOpen, isAdminDashboardOpen,

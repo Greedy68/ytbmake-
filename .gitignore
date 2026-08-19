@@ -15,9 +15,18 @@ dist-ssr
 .env.*
 !.env.example
 .firebase/
+.vercel/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# Local credentials and private keys
+*service-account*.json
+*service_account*.json
+application_default_credentials.json
+credentials.json
+*.pem
+*.key
 
 # Editor directories and files
 .vscode/*

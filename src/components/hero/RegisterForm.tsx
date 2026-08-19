@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Zap, Sparkles, CheckCircle2, Flame, Clock } from 'lucide-react';
+import { ShieldCheck, Zap, Sparkles, CheckCircle2, Flame, Clock, AlertCircle } from 'lucide-react';
 import { landingData } from '../../data/landingData';
 import { useApp } from '../../context/AppContext';
 
@@ -7,8 +7,10 @@ const FLASH_SALE_KEY = 'ymm_flash_sale_end_time';
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const RegisterForm: React.FC = () => {
-  const { setIsAuthModalOpen } = useApp();
+  const { setIsAuthModalOpen, signInWithSocial } = useApp();
   const [activeTab, setActiveTab] = useState<'register' | 'login'>('register');
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState('');
 
   // 30-Day Countdown Timer State
   const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number }>({
@@ -65,6 +67,18 @@ export const RegisterForm: React.FC = () => {
     setIsAuthModalOpen(true);
   };
 
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setGoogleError('');
+    try {
+      await signInWithSocial('google');
+    } catch (error) {
+      setGoogleError(error instanceof Error ? error.message : 'Không thể đăng nhập với Google.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <div id="register" className="w-full max-w-md mx-auto bg-[#001848]/95 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl overflow-hidden p-6 sm:p-8 text-white relative group">
       {/* Decorative Glow */}
@@ -112,10 +126,17 @@ export const RegisterForm: React.FC = () => {
       </div>
 
       {/* Google Login Button */}
+      {googleError && (
+        <div role="alert" className="mb-3 p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-200 text-xs flex gap-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{googleError}</span>
+        </div>
+      )}
       <button
         type="button"
-        onClick={handleOpenAuthModal}
-        className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl bg-white hover:bg-gray-100 text-gray-800 font-bold text-sm transition-all shadow-md active:scale-98 mb-5 cursor-pointer"
+        onClick={() => void handleGoogleSignIn()}
+        disabled={googleLoading}
+        className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl bg-white hover:bg-gray-100 text-gray-800 font-bold text-sm transition-all shadow-md active:scale-98 mb-5 cursor-pointer disabled:opacity-60 disabled:cursor-wait focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fabb15]"
       >
         <svg className="w-5 h-5" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -123,7 +144,7 @@ export const RegisterForm: React.FC = () => {
           <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
           <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
         </svg>
-        <span>Đăng nhập với Google</span>
+        <span>{googleLoading ? 'Đang kết nối Google…' : 'Tiếp tục với Google'}</span>
       </button>
 
       {/* Tabs */}

@@ -2,10 +2,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  auth: { currentUser: null as null | { uid: string; email: string } },
+  auth: { currentUser: null as null | { uid: string; email: string; providerData: Array<{ providerId: string }> } },
   authChanged: null as null | ((user: unknown) => Promise<void>),
   ensureProfile: vi.fn(), signIn: vi.fn(), createUser: vi.fn(), signOut: vi.fn(),
   updateProfile: vi.fn(), reauthenticate: vi.fn(), updatePassword: vi.fn(), reset: vi.fn(),
+  socialPopup: vi.fn(), socialRedirect: vi.fn(), redirectResult: vi.fn(),
 }));
 
 vi.mock('../src/config/firebase', () => ({ auth: mocks.auth }));
@@ -19,6 +20,11 @@ vi.mock('firebase/auth', () => ({
   reauthenticateWithCredential: mocks.reauthenticate,
   updatePassword: mocks.updatePassword,
   sendPasswordResetEmail: mocks.reset,
+  signInWithPopup: mocks.socialPopup,
+  signInWithRedirect: mocks.socialRedirect,
+  getRedirectResult: mocks.redirectResult,
+  GoogleAuthProvider: class { setCustomParameters = vi.fn(); },
+  FacebookAuthProvider: class { setCustomParameters = vi.fn(); },
 }));
 vi.mock('../src/services/firestore', () => ({
   ensureUserProfile: mocks.ensureProfile,
@@ -39,13 +45,15 @@ function Probe() {
     <button onClick={() => void app.logout()}>logout</button>
     <button onClick={() => void app.changePassword('password123', 'newpassword123')}>change</button>
     <button onClick={() => void app.requestPasswordReset('user@example.com')}>reset</button>
+    <button onClick={() => void app.signInWithSocial('google').catch(() => undefined)}>google</button>
+    <button onClick={() => void app.signInWithSocial('facebook').catch(() => undefined)}>facebook</button>
   </div>;
 }
 
 const state = () => JSON.parse(screen.getByTestId('state').textContent ?? '{}');
 
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.authChanged = null; mocks.auth.currentUser = null; mocks.ensureProfile.mockResolvedValue(profile);
+  vi.clearAllMocks(); mocks.authChanged = null; mocks.auth.currentUser = null; mocks.ensureProfile.mockResolvedValue(profile); mocks.redirectResult.mockResolvedValue(null);
 });
 afterEach(cleanup);
 
@@ -81,7 +89,7 @@ describe('AppProvider authentication lifecycle', () => {
   });
 
   it('logs in, logs out, changes password with reauthentication, and requests reset', async () => {
-    mocks.auth.currentUser = { uid: 'uid-1', email: 'user@example.com' };
+    mocks.auth.currentUser = { uid: 'uid-1', email: 'user@example.com', providerData: [{ providerId: 'password' }] };
     render(<AppProvider><Probe /></AppProvider>);
     await act(async () => { await mocks.authChanged?.({ uid: 'uid-1', email: 'user@example.com' }); });
     fireEvent.click(screen.getByText('login'));
@@ -94,5 +102,51 @@ describe('AppProvider authentication lifecycle', () => {
     fireEvent.click(screen.getByText('logout'));
     await waitFor(() => expect(mocks.signOut).toHaveBeenCalled());
     expect(state().user).toBeNull();
+  });
+
+  it('signs in with Google and creates a safe user profile', async () => {
+    const firebaseUser = { uid: 'google-uid', email: 'google@example.com', providerData: [{ providerId: 'google.com' }] };
+    mocks.socialPopup.mockResolvedValue({ user: firebaseUser });
+    render(<AppProvider><Probe /></AppProvider>);
+    await act(async () => { await mocks.authChanged?.(null); });
+    fireEvent.click(screen.getByText('google'));
+    await waitFor(() => expect(mocks.ensureProfile).toHaveBeenCalledWith(firebaseUser));
+    expect(state().user.role).toBe('user');
+  });
+
+  it('preserves an existing admin profile after Google sign-in', async () => {
+    const adminProfile = { ...profile, role: 'admin' as const };
+    mocks.ensureProfile.mockResolvedValue(adminProfile);
+    mocks.socialPopup.mockResolvedValue({ user: { uid: 'uid-1', providerData: [{ providerId: 'google.com' }] } });
+    render(<AppProvider><Probe /></AppProvider>);
+    await act(async () => { await mocks.authChanged?.(null); });
+    fireEvent.click(screen.getByText('google'));
+    await waitFor(() => expect(state().user.role).toBe('admin'));
+  });
+
+  it('returns a clear provider-collision error without creating a profile', async () => {
+    mocks.socialPopup.mockRejectedValue({ code: 'auth/account-exists-with-different-credential' });
+    render(<AppProvider><Probe /></AppProvider>);
+    await act(async () => { await mocks.authChanged?.(null); });
+    fireEvent.click(screen.getByText('google'));
+    await waitFor(() => expect(mocks.socialPopup).toHaveBeenCalled());
+    expect(mocks.ensureProfile).not.toHaveBeenCalled();
+  });
+
+  it('supports Facebook sign-in and handles a closed popup without profile writes', async () => {
+    const facebookUser = { uid: 'facebook-uid', email: 'facebook@example.com', providerData: [{ providerId: 'facebook.com' }] };
+    mocks.socialPopup.mockResolvedValueOnce({ user: facebookUser });
+    render(<AppProvider><Probe /></AppProvider>);
+    await act(async () => { await mocks.authChanged?.(null); });
+    fireEvent.click(screen.getByText('facebook'));
+    await waitFor(() => expect(mocks.ensureProfile).toHaveBeenCalledWith(facebookUser));
+    cleanup();
+    vi.clearAllMocks(); mocks.redirectResult.mockResolvedValue(null);
+    mocks.socialPopup.mockRejectedValueOnce({ code: 'auth/popup-closed-by-user' });
+    render(<AppProvider><Probe /></AppProvider>);
+    await act(async () => { await mocks.authChanged?.(null); });
+    fireEvent.click(screen.getByText('google'));
+    await waitFor(() => expect(mocks.socialPopup).toHaveBeenCalled());
+    expect(mocks.ensureProfile).not.toHaveBeenCalled();
   });
 });
