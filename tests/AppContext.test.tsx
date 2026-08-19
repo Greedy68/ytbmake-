@@ -29,7 +29,7 @@ vi.mock('firebase/auth', () => ({
 vi.mock('../src/services/firestore', () => ({
   ensureUserProfile: mocks.ensureProfile,
   listPublishedMedia: vi.fn(async () => []), listAdminMedia: vi.fn(async () => []), listUsers: vi.fn(async () => []),
-  updateUserAccess: vi.fn(), createMedia: vi.fn(), updateMedia: vi.fn(), removeMedia: vi.fn(),
+  updateUserAccess: vi.fn(), setEnrollment: vi.fn(), createMedia: vi.fn(), updateMedia: vi.fn(), removeMedia: vi.fn(),
 }));
 
 import { AppProvider, useApp } from '../src/context/AppContext';

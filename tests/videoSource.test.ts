@@ -1,23 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { getVideoPlayerAdapter, isSafeHttpsUrl } from '../src/services/videoSource';
+import { buildYouTubeEmbedUrl, getVideoPlayerAdapter, isSafeHttpsUrl, parseYouTubeVideoId, videoSourceResolver } from '../src/services/videoSource';
 
-describe('video source resolver', () => {
-  it('accepts only safe HTTPS URLs', () => {
-    expect(isSafeHttpsUrl('https://cdn.example.com/video.mp4')).toBe(true);
-    expect(isSafeHttpsUrl('javascript:alert(1)')).toBe(false);
+describe('YouTube source parsing', () => {
+  it.each([
+    ['abcdefghijk', 'abcdefghijk'],
+    ['https://www.youtube.com/watch?v=abcdefghijk', 'abcdefghijk'],
+    ['https://youtu.be/abcdefghijk?t=4', 'abcdefghijk'],
+    ['https://youtube.com/embed/abcdefghijk', 'abcdefghijk'],
+  ])('normalizes %s', (input, expected) => expect(parseYouTubeVideoId(input)).toBe(expected));
+
+  it.each(['javascript:alert(1)', 'data:text/html,bad', '<iframe src="https://youtu.be/abcdefghijk">', 'https://youtube.example/watch?v=abcdefghijk', 'http://youtu.be/abcdefghijk', 'too-short'])('rejects unsafe input %s', (input) => expect(parseYouTubeVideoId(input)).toBeNull());
+  it('only builds an embed URL from a validated ID', () => {
+    expect(buildYouTubeEmbedUrl('abcdefghijk')).toBe('https://www.youtube.com/embed/abcdefghijk?fs=0&rel=0');
+    expect(buildYouTubeEmbedUrl('javascript:')).toBeNull();
+  });
+});
+
+describe('provider-neutral resolver and adapter', () => {
+  it('resolves YouTube without exposing raw iframe HTML', () => {
+    const session = videoSourceResolver.resolve({ provider: 'youtube', sourceId: 'abcdefghijk', sourceType: 'unlisted' });
+    const adapter = getVideoPlayerAdapter(session, 'Lesson');
+    expect(adapter).toMatchObject({ kind: 'iframe', provider: 'youtube', src: 'https://www.youtube.com/embed/abcdefghijk?fs=0&rel=0' });
+    expect(JSON.stringify(adapter)).not.toContain('<iframe');
+  });
+  it('keeps future signed providers compatible with the same player adapter', () => {
+    expect(getVideoPlayerAdapter({ provider: 'mux', playbackUrl: 'https://stream.example/signed.m3u8', expiresAt: Date.now() + 1000 }, 'Mux')).toMatchObject({ kind: 'signed', provider: 'mux' });
     expect(isSafeHttpsUrl('data:text/html,bad')).toBe(false);
-    expect(isSafeHttpsUrl('http://example.com/video.mp4')).toBe(false);
   });
-
-  it('returns a placeholder for an unset source', () => {
-    expect(getVideoPlayerAdapter({ type: 'unset', url: null, path: null }, 'Video')).toEqual({
-      kind: 'unavailable', reason: 'Video chưa được cấu hình',
-    });
-  });
-
-  it('creates safe adapters for external, YouTube and Vimeo sources', () => {
-    expect(getVideoPlayerAdapter({ type: 'external_url', url: 'https://cdn.example.com/a.mp4', path: null }, 'A').kind).toBe('html5');
-    expect(getVideoPlayerAdapter({ type: 'youtube', url: 'https://youtu.be/abcdefghijk', path: null }, 'A')).toMatchObject({ kind: 'iframe', src: 'https://www.youtube.com/embed/abcdefghijk' });
-    expect(getVideoPlayerAdapter({ type: 'vimeo', url: 'https://vimeo.com/123456', path: null }, 'A')).toMatchObject({ kind: 'iframe', src: 'https://player.vimeo.com/video/123456' });
+  it('returns a safe unavailable state for unset or malformed sources', () => {
+    expect(getVideoPlayerAdapter({ provider: 'unset', reason: 'Video chưa được cấu hình' }, 'Video')).toEqual({ kind: 'unavailable', reason: 'Video chưa được cấu hình' });
+    expect(videoSourceResolver.resolve({ provider: 'youtube', sourceId: 'bad', sourceType: 'unlisted' })).toMatchObject({ provider: 'unset' });
   });
 });

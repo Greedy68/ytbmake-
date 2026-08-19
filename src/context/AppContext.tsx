@@ -23,11 +23,12 @@ import {
   listPublishedMedia,
   listUsers,
   removeMedia,
+  setEnrollment,
   updateMedia,
   updateUserAccess,
   type MediaInput,
 } from '../services/firestore';
-import type { Comment, PaymentOrder, User, UserRole, UserStatus, VideoLesson } from '../types/app';
+import type { Comment, EnrollmentStatus, MediaSourceInput, PaymentOrder, User, UserRole, UserStatus, VideoLesson } from '../types/app';
 
 interface AppContextType {
   currentUser: User | null;
@@ -43,12 +44,13 @@ interface AppContextType {
   users: User[];
   loadUsers: () => Promise<void>;
   setUserAccess: (uid: string, role: UserRole, status: UserStatus) => Promise<void>;
+  manageEnrollment: (uid: string, courseId: string, status: EnrollmentStatus) => Promise<void>;
   lessons: VideoLesson[];
   mediaLoading: boolean;
   mediaError: string | null;
   reloadMedia: () => Promise<void>;
-  addLesson: (lesson: MediaInput) => Promise<void>;
-  editLesson: (id: string, lesson: Partial<MediaInput>) => Promise<void>;
+  addLesson: (lesson: MediaInput, source: MediaSourceInput) => Promise<void>;
+  editLesson: (id: string, lesson: MediaInput, source: MediaSourceInput) => Promise<void>;
   deleteLesson: (id: string) => Promise<void>;
   comments: Comment[];
   addComment: (lessonId: string, content: string) => void;
@@ -242,14 +244,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateUserAccess(uid, role, status);
     await loadUsers();
   };
+  const manageEnrollment = async (uid: string, courseId: string, status: EnrollmentStatus) => {
+    if (currentUser?.role !== 'admin') throw new Error('Bạn không có quyền quản lý enrollment.');
+    await setEnrollment(uid, courseId, status);
+  };
 
-  const addLesson = async (lesson: MediaInput) => {
+  const addLesson = async (lesson: MediaInput, source: MediaSourceInput) => {
     if (!currentUser) throw new Error('Bạn cần đăng nhập.');
-    await createMedia(lesson, currentUser.id);
+    await createMedia(lesson, source, currentUser.id);
     await reloadMedia();
   };
-  const editLesson = async (id: string, lesson: Partial<MediaInput>) => {
-    await updateMedia(id, lesson);
+  const editLesson = async (id: string, lesson: MediaInput, source: MediaSourceInput) => {
+    if (!currentUser) throw new Error('Bạn cần đăng nhập.');
+    await updateMedia(id, lesson, source, currentUser.id);
     await reloadMedia();
   };
   const deleteLesson = async (id: string) => {
@@ -277,14 +284,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPurchasedLessonIds((items) => [...items, lesson.id]);
     return true;
   };
-  const hasAccessToLesson = (lesson: VideoLesson) => lesson.visibility === 'public'
-    || lesson.isFreePreview || currentUser?.role === 'admin' || purchasedLessonIds.includes(lesson.id);
+  const hasAccessToLesson = (lesson: VideoLesson) => currentUser?.status === 'active' && (
+    lesson.visibility === 'public' || lesson.visibility === 'authenticated' || lesson.visibility === 'enrolled'
+    || currentUser.role === 'admin' || purchasedLessonIds.includes(lesson.id));
 
   const hasPasswordProvider = Boolean(auth.currentUser?.providerData.some((provider) => provider.providerId === 'password'));
 
   return <AppContext.Provider value={{
     currentUser, authLoading, authError, login, register, signInWithSocial, hasPasswordProvider, logout, changePassword, requestPasswordReset,
-    users, loadUsers, setUserAccess, lessons, mediaLoading, mediaError, reloadMedia, addLesson, editLesson, deleteLesson,
+    users, loadUsers, setUserAccess, manageEnrollment, lessons, mediaLoading, mediaError, reloadMedia, addLesson, editLesson, deleteLesson,
     comments, addComment, approveComment, rejectComment, deleteComment, purchasedLessonIds, orders,
     processPayPalPayment, hasAccessToLesson, isAuthModalOpen, setIsAuthModalOpen, isAdminDashboardOpen,
     setIsAdminDashboardOpen, activeLesson, setActiveLesson, activePayPalLesson, setActivePayPalLesson,

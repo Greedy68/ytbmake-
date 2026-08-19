@@ -2,19 +2,15 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return signedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
-    }
-
-    function rootAdminUid() {
-      return get(/databases/$(database)/documents/system/security).data.rootAdminUid;
-    }
+    function isSignedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isActiveUser() { return isSignedIn() && userDoc().data.status == 'active'; }
+    function isAdmin() { return isActiveUser() && userDoc().data.role == 'admin'; }
+    function rootAdminUid() { return get(/databases/$(database)/documents/system/security).data.rootAdminUid; }
+    function validNullableString(value, max) { return value == null || (value is string && value.size() <= max); }
+    function validHttpsUrl(value, max) { return value == null || (value is string && value.size() <= max && value.matches('^https://[^\\s]+$')); }
+    function validId(value) { return value is string && value.size() >= 1 && value.size() <= 100 && value.matches('^[A-Za-z0-9_-]+$'); }
+    function validUid(value) { return value is string && value.size() >= 1 && value.size() <= 128 && value.matches('^[A-Za-z0-9_-]+$'); }
 
     function validUser(data) {
       return data.keys().hasOnly(['email', 'displayName', 'photoURL', 'role', 'status', 'createdAt', 'updatedAt'])
@@ -22,91 +18,122 @@ service cloud.firestore {
         && data.email is string && data.email.size() <= 320
         && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
         && (!data.keys().hasAny(['photoURL']) || validHttpsUrl(data.photoURL, 2048))
-        && data.role in ['user', 'admin']
-        && data.status in ['active', 'disabled']
+        && data.role in ['user', 'admin'] && data.status in ['active', 'disabled']
         && data.createdAt is timestamp && data.updatedAt is timestamp;
     }
 
     match /users/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin() && request.query.limit <= 50;
-      allow create: if signedIn() && request.auth.uid == uid
-        && validUser(request.resource.data)
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.role == 'user'
-        && request.resource.data.status == 'active'
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      allow update: if signedIn() && request.auth.uid == uid
-        && validUser(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'updatedAt'])
-        && request.resource.data.updatedAt == request.time;
-      allow update: if isAdmin() && request.auth.uid != uid && uid != rootAdminUid()
-        && validUser(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'updatedAt'])
-        && request.resource.data.updatedAt == request.time;
+      allow create: if isSignedIn() && request.auth.uid == uid && validUser(request.resource.data)
+        && request.resource.data.email == request.auth.token.email && request.resource.data.role == 'user'
+        && request.resource.data.status == 'active' && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() && request.auth.uid == uid && validUser(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'updatedAt']) && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin() && request.auth.uid != uid && uid != rootAdminUid() && validUser(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'updatedAt']) && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }
 
-    function validNullableString(value, max) {
-      return value == null || (value is string && value.size() <= max);
-    }
-
-    function validHttpsUrl(value, max) {
-      return value == null || (value is string && value.size() <= max && value.matches('^https://[^\\s]+$'));
-    }
-
     function validMedia(data) {
-      return data.keys().hasOnly([
-          'type', 'title', 'description', 'sourceType', 'sourceUrl', 'sourcePath', 'thumbnailUrl',
-          'visibility', 'status', 'createdBy', 'createdAt', 'updatedAt', 'publishedAt',
-          'moduleId', 'moduleTitle', 'duration', 'isFreePreview', 'price'
-        ])
-        && data.keys().hasAll([
-          'type', 'title', 'description', 'sourceType', 'sourceUrl', 'sourcePath', 'thumbnailUrl',
-          'visibility', 'status', 'createdBy', 'createdAt', 'updatedAt', 'publishedAt',
-          'moduleId', 'moduleTitle', 'duration', 'isFreePreview', 'price'
-        ])
-        && data.type == 'video'
-        && data.title is string && data.title.size() >= 2 && data.title.size() <= 150
+      return data.keys().hasOnly(['type', 'title', 'description', 'thumbnailUrl', 'courseId', 'lessonId', 'provider', 'visibility', 'status', 'durationSeconds', 'order', 'createdBy', 'createdAt', 'updatedAt', 'publishedAt', 'sourceConfigured'])
+        && data.keys().hasAll(['type', 'title', 'description', 'thumbnailUrl', 'courseId', 'lessonId', 'provider', 'visibility', 'status', 'durationSeconds', 'order', 'createdBy', 'createdAt', 'updatedAt', 'publishedAt', 'sourceConfigured'])
+        && data.type == 'video' && data.title is string && data.title.size() >= 2 && data.title.size() <= 150
         && data.description is string && data.description.size() <= 2000
-        && data.sourceType in ['external_url', 'youtube', 'vimeo', 'future_storage', 'unset']
-        && validHttpsUrl(data.sourceUrl, 2048) && validNullableString(data.sourcePath, 1024)
         && (data.thumbnailUrl == '' || validHttpsUrl(data.thumbnailUrl, 2048))
-        && (data.sourceType in ['unset', 'future_storage'] || data.sourceUrl != null)
-        && data.visibility in ['public', 'authenticated', 'private']
+        && validId(data.courseId) && validId(data.lessonId)
+        && data.provider in ['youtube', 'cloudflare_stream', 'mux', 'unset']
+        && data.visibility in ['public', 'authenticated', 'enrolled']
         && data.status in ['draft', 'published', 'archived']
-        && data.createdBy is string
-        && data.createdAt is timestamp && data.updatedAt is timestamp
-        && (data.publishedAt == null || data.publishedAt is timestamp)
-        && data.moduleId is string && data.moduleId.size() <= 100
-        && data.moduleTitle is string && data.moduleTitle.size() <= 150
-        && data.duration is string && data.duration.size() <= 32
-        && data.isFreePreview is bool
-        && data.price is number && data.price >= 0 && data.price <= 100000;
+        && data.durationSeconds is int && data.durationSeconds >= 0 && data.durationSeconds <= 86400
+        && data.order is int && data.order >= 0 && data.order <= 100000
+        && data.createdBy is string && data.createdAt is timestamp && data.updatedAt is timestamp
+        && (data.publishedAt == null || data.publishedAt is timestamp) && data.sourceConfigured is bool
+        && ((data.provider == 'unset' && data.sourceConfigured == false) || (data.provider != 'unset'));
+    }
+
+    function isEnrolled(courseId) {
+      let enrollment = get(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId));
+      return isActiveUser() && enrollment.data.uid == request.auth.uid && enrollment.data.courseId == courseId
+        && enrollment.data.status == 'active' && (enrollment.data.expiresAt == null || enrollment.data.expiresAt > request.time);
+    }
+
+    function canReadMedia(data) {
+      return isAdmin() || (data.status == 'published' && (
+        data.visibility == 'public'
+        || (data.visibility == 'authenticated' && isActiveUser())
+        || (data.visibility == 'enrolled' && isEnrolled(data.courseId))));
+    }
+
+    function sourceStateMatches(mediaId, data) {
+      let sourcePath = /databases/$(database)/documents/mediaSources/$(mediaId);
+      return (data.sourceConfigured == false && !existsAfter(sourcePath))
+        || (data.sourceConfigured == true && existsAfter(sourcePath) && getAfter(sourcePath).data.provider == data.provider);
     }
 
     match /media/{mediaId} {
-      allow read: if isAdmin()
-        || (resource.data.status == 'published' && resource.data.visibility == 'public')
-        || (signedIn() && resource.data.status == 'published' && resource.data.visibility == 'authenticated');
-      allow create: if isAdmin() && validMedia(request.resource.data)
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      allow update: if isAdmin() && validMedia(request.resource.data)
-        && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.updatedAt == request.time;
+      allow get, list: if canReadMedia(resource.data);
+      allow create: if isAdmin() && validMedia(request.resource.data) && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time
+        && sourceStateMatches(mediaId, request.resource.data);
+      allow update: if isAdmin() && validMedia(request.resource.data) && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time
+        && sourceStateMatches(mediaId, request.resource.data);
       allow delete: if isAdmin();
     }
 
-    match /system/{document} {
-      allow read, write: if false;
+    function canViewMedia(mediaId) {
+      let media = get(/databases/$(database)/documents/media/$(mediaId));
+      return isAdmin() || (isActiveUser() && media.data.status == 'published' && (
+        media.data.visibility in ['public', 'authenticated']
+        || (media.data.visibility == 'enrolled' && isEnrolled(media.data.courseId))));
     }
 
-    match /{document=**} {
-      allow read, write: if false;
+    function validMediaSource(data) {
+      return data.keys().hasOnly(['provider', 'sourceId', 'sourceType', 'assetId', 'playbackId', 'playbackPolicy', 'updatedAt', 'updatedBy'])
+        && data.keys().hasAll(['provider', 'updatedAt', 'updatedBy'])
+        && data.provider in ['youtube', 'cloudflare_stream', 'mux'] && data.updatedAt is timestamp && data.updatedBy is string
+        && ((data.provider == 'youtube'
+          && data.keys().hasAll(['sourceId', 'sourceType']) && data.sourceId is string
+          && data.sourceId.matches('^[A-Za-z0-9_-]{11}$') && data.sourceType == 'unlisted'
+          && !data.keys().hasAny(['assetId', 'playbackId', 'playbackPolicy']))
+        || (data.provider in ['cloudflare_stream', 'mux']
+          && data.keys().hasAll(['assetId', 'playbackPolicy']) && validId(data.assetId)
+          && (!data.keys().hasAny(['playbackId']) || validNullableString(data.playbackId, 256))
+          && data.playbackPolicy == 'signed'
+          && !data.keys().hasAny(['sourceId', 'sourceType'])));
     }
+
+    match /mediaSources/{mediaId} {
+      allow get: if canViewMedia(mediaId);
+      allow list: if isAdmin() && request.query.limit <= 50;
+      allow create, update: if isAdmin() && validMediaSource(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/media/$(mediaId)).data.sourceConfigured == true
+        && getAfter(/databases/$(database)/documents/media/$(mediaId)).data.provider == request.resource.data.provider;
+      allow delete: if isAdmin();
+    }
+
+    function validEnrollment(data, enrollmentId) {
+      return data.keys().hasOnly(['uid', 'courseId', 'status', 'startsAt', 'expiresAt', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['uid', 'courseId', 'status', 'startsAt', 'expiresAt', 'createdAt', 'updatedAt'])
+        && validUid(data.uid) && validId(data.courseId) && enrollmentId == data.uid + '_' + data.courseId
+        && data.status in ['active', 'expired', 'revoked'] && data.startsAt is timestamp
+        && (data.expiresAt == null || data.expiresAt is timestamp) && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow get: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow list: if request.query.limit <= 50 && (isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid));
+      allow create: if isAdmin() && validEnrollment(request.resource.data, enrollmentId)
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin() && validEnrollment(request.resource.data, enrollmentId)
+        && request.resource.data.uid == resource.data.uid && request.resource.data.courseId == resource.data.courseId
+        && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /system/{document} { allow read, write: if false; }
+    match /{document=**} { allow read, write: if false; }
   }
 }

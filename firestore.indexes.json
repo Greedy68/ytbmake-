@@ -1,9 +1,28 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "media",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "enrollments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": [
     { "collectionGroup": "media", "fieldPath": "description", "indexes": [] },
-    { "collectionGroup": "media", "fieldPath": "sourceUrl", "indexes": [] },
-    { "collectionGroup": "media", "fieldPath": "sourcePath", "indexes": [] },
-    { "collectionGroup": "media", "fieldPath": "thumbnailUrl", "indexes": [] }
+    { "collectionGroup": "media", "fieldPath": "thumbnailUrl", "indexes": [] },
+    { "collectionGroup": "mediaSources", "fieldPath": "sourceId", "indexes": [] },
+    { "collectionGroup": "mediaSources", "fieldPath": "assetId", "indexes": [] },
+    { "collectionGroup": "mediaSources", "fieldPath": "playbackId", "indexes": [] }
   ]
 }

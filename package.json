@@ -12,6 +12,7 @@
     "test:rules": "firebase emulators:exec --only firestore,auth --project demo-ymm-academy \"vitest run tests/firestore.rules.test.ts\"",
     "test:all": "npm run test && npm run test:rules",
     "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
+    "migrate:media-sources": "node scripts/migrate-media-sources.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
