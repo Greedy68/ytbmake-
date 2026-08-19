@@ -9,7 +9,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ channels }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const { currentUser, setIsAuthModalOpen, setIsAdminDashboardOpen, comments } = useApp();
+  const { currentUser, authLoading, setIsAuthModalOpen, setIsAdminDashboardOpen, comments } = useApp();
 
   const pendingCommentsCount = comments.filter((c) => c.status === 'pending').length;
 
@@ -78,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({ channels }) => {
           <div className="flex items-center gap-3">
             
             {/* Admin Dashboard Button */}
-            {currentUser?.role === 'admin' && (
+            {!authLoading && currentUser?.role === 'admin' && (
               <button
                 onClick={() => setIsAdminDashboardOpen(true)}
                 className="relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-extrabold text-[#001848] bg-[#fabb15] hover:bg-amber-400 border border-amber-300 shadow-md transition-all hover:scale-105"
@@ -94,7 +94,9 @@ export const Header: React.FC<HeaderProps> = ({ channels }) => {
             )}
 
             {/* User Profile / Login trigger */}
-            {currentUser ? (
+            {authLoading ? (
+              <span className="text-xs text-blue-200">Đang kiểm tra phiên…</span>
+            ) : currentUser ? (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
                 className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 transition-all"

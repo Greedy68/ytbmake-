@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Lock, MessageSquare, Send, CheckCircle } from 'lucide-react';
+import { X, Lock, MessageSquare, Send, CheckCircle, VideoOff } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { getVideoPlayerAdapter, resolveVideoSource } from '../../services/videoSource';
 
 export const VideoPlayerModal: React.FC = () => {
   const {
@@ -22,6 +23,8 @@ export const VideoPlayerModal: React.FC = () => {
   const userHasAccess = hasAccessToLesson(activeLesson);
   const lessonComments = comments.filter((c) => c.lessonId === activeLesson.id);
   const approvedComments = lessonComments.filter((c) => c.status === 'approved');
+  const adapter = getVideoPlayerAdapter(resolveVideoSource(activeLesson), activeLesson.title);
+  const unavailableReason = adapter.kind === 'unavailable' ? adapter.reason : '';
 
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,14 +66,18 @@ export const VideoPlayerModal: React.FC = () => {
 
         {/* Video Screen / Locked Screen */}
         <div className="relative w-full aspect-video bg-black flex-shrink-0">
-          {userHasAccess ? (
+          {userHasAccess && adapter.kind === 'html5' ? (
             <video
-              src={activeLesson.videoUrl}
+              src={adapter.src}
               controls
               autoPlay
               poster={activeLesson.thumbnailUrl}
               className="w-full h-full object-contain"
             />
+          ) : userHasAccess && adapter.kind === 'iframe' ? (
+            <iframe src={adapter.src} title={adapter.title} className="w-full h-full" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
+          ) : userHasAccess ? (
+            <div className="w-full h-full flex flex-col items-center justify-center text-blue-200"><VideoOff className="w-12 h-12 mb-3" /><p>{unavailableReason}</p></div>
           ) : (
             <div className="relative w-full h-full flex flex-col items-center justify-center p-6 text-center overflow-hidden">
               {/* Blurred Poster Background */}

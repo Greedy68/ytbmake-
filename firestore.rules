@@ -1,0 +1,103 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function validUser(data) {
+      return data.keys().hasOnly(['email', 'displayName', 'role', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['email', 'displayName', 'role', 'status', 'createdAt', 'updatedAt'])
+        && data.email is string && data.email.size() <= 320
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.role in ['user', 'admin']
+        && data.status in ['active', 'disabled']
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin() && request.query.limit <= 50;
+      allow create: if signedIn() && request.auth.uid == uid
+        && validUser(request.resource.data)
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == 'user'
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn() && request.auth.uid == uid
+        && validUser(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin() && request.auth.uid != uid
+        && validUser(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'status', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    function validNullableString(value, max) {
+      return value == null || (value is string && value.size() <= max);
+    }
+
+    function validHttpsUrl(value, max) {
+      return value == null || (value is string && value.size() <= max && value.matches('^https://[^\\s]+$'));
+    }
+
+    function validMedia(data) {
+      return data.keys().hasOnly([
+          'type', 'title', 'description', 'sourceType', 'sourceUrl', 'sourcePath', 'thumbnailUrl',
+          'visibility', 'status', 'createdBy', 'createdAt', 'updatedAt', 'publishedAt',
+          'moduleId', 'moduleTitle', 'duration', 'isFreePreview', 'price'
+        ])
+        && data.keys().hasAll([
+          'type', 'title', 'description', 'sourceType', 'sourceUrl', 'sourcePath', 'thumbnailUrl',
+          'visibility', 'status', 'createdBy', 'createdAt', 'updatedAt', 'publishedAt',
+          'moduleId', 'moduleTitle', 'duration', 'isFreePreview', 'price'
+        ])
+        && data.type == 'video'
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 150
+        && data.description is string && data.description.size() <= 2000
+        && data.sourceType in ['external_url', 'youtube', 'vimeo', 'future_storage', 'unset']
+        && validHttpsUrl(data.sourceUrl, 2048) && validNullableString(data.sourcePath, 1024)
+        && (data.thumbnailUrl == '' || validHttpsUrl(data.thumbnailUrl, 2048))
+        && (data.sourceType in ['unset', 'future_storage'] || data.sourceUrl != null)
+        && data.visibility in ['public', 'authenticated', 'private']
+        && data.status in ['draft', 'published', 'archived']
+        && data.createdBy is string
+        && data.createdAt is timestamp && data.updatedAt is timestamp
+        && (data.publishedAt == null || data.publishedAt is timestamp)
+        && data.moduleId is string && data.moduleId.size() <= 100
+        && data.moduleTitle is string && data.moduleTitle.size() <= 150
+        && data.duration is string && data.duration.size() <= 32
+        && data.isFreePreview is bool
+        && data.price is number && data.price >= 0 && data.price <= 100000;
+    }
+
+    match /media/{mediaId} {
+      allow read: if isAdmin()
+        || (resource.data.status == 'published' && resource.data.visibility == 'public')
+        || (signedIn() && resource.data.status == 'published' && resource.data.visibility == 'authenticated');
+      allow create: if isAdmin() && validMedia(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin() && validMedia(request.resource.data)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

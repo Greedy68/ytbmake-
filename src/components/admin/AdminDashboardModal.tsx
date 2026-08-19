@@ -1,528 +1,91 @@
-import React, { useState } from 'react';
-import { X, Upload, MessageSquare, Video, CheckCircle2, Trash2, ShieldAlert, PlusCircle, Clock, DollarSign, UserCheck, UserPlus, Shield } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle2, Pencil, PlusCircle, Shield, ShieldAlert, Trash2, Video, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import type { CommentStatus } from '../../types/app';
+import { isSafeHttpsUrl } from '../../services/videoSource';
+import type { MediaStatus, MediaVisibility, UserRole, UserStatus, VideoLesson, VideoSourceType } from '../../types/app';
+
+const emptyForm = {
+  moduleTitle: 'Video YMM', title: '', description: '', duration: '', thumbnailUrl: '',
+  sourceType: 'unset' as VideoSourceType, sourceUrl: '', visibility: 'private' as MediaVisibility,
+  status: 'draft' as MediaStatus, isFreePreview: false, price: 0,
+};
 
 export const AdminDashboardModal: React.FC = () => {
   const {
-    isAdminDashboardOpen,
-    setIsAdminDashboardOpen,
-    currentUser,
-    adminEmails,
-    addAdminEmail,
-    removeAdminEmail,
-    lessons,
-    addLesson,
-    deleteLesson,
-    comments,
-    approveComment,
-    rejectComment,
-    deleteComment,
+    isAdminDashboardOpen, setIsAdminDashboardOpen, currentUser, users, loadUsers, setUserAccess,
+    lessons, mediaLoading, mediaError, addLesson, editLesson, deleteLesson,
   } = useApp();
+  const [tab, setTab] = useState<'media' | 'users'>('media');
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'upload' | 'comments' | 'admins'>('upload');
-  const [commentFilter, setCommentFilter] = useState<CommentStatus | 'all'>('pending');
-
-  // New Lesson Form State
-  const [moduleTitle, setModuleTitle] = useState('Module 01: Thiết Kế Giao Diện');
-  const [title, setTitle] = useState('');
-  const [duration, setDuration] = useState('15:30');
-  const [thumbnailUrl, setThumbnailUrl] = useState('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80');
-  const [videoUrl, setVideoUrl] = useState('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
-  const [isFreePreview, setIsFreePreview] = useState(false);
-  const [price, setPrice] = useState(19.99);
-  const [successMessage, setSuccessMessage] = useState('');
-
-  // New Admin Email Form State
-  const [newAdminEmail, setNewAdminEmail] = useState('');
-  const [adminSuccessMsg, setAdminSuccessMsg] = useState('');
+  useEffect(() => {
+    if (isAdminDashboardOpen && currentUser?.role === 'admin') void loadUsers().catch(() => setNotice({ type: 'error', text: 'Không thể tải danh sách người dùng.' }));
+  }, [isAdminDashboardOpen, currentUser?.role, loadUsers]); // load only when the admin panel opens
 
   if (!isAdminDashboardOpen) return null;
+  if (currentUser?.role !== 'admin') return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><div className="bg-[#001848] p-6 rounded-2xl text-center text-white"><ShieldAlert className="mx-auto text-red-500" /><p className="mt-3">Quyền truy cập bị từ chối.</p><button onClick={() => setIsAdminDashboardOpen(false)} className="mt-4">Đóng</button></div></div>;
 
-  if (currentUser?.role !== 'admin') {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-        <div className="bg-[#001848] border border-red-500/40 rounded-2xl p-6 max-w-sm text-center text-white space-y-4">
-          <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
-          <h3 className="text-lg font-bold">Quyền Truy Cập Bị Từ Chối</h3>
-          <p className="text-xs text-blue-200">Bạn cần đăng nhập với quyền Admin để vào trang này.</p>
-          <button
-            onClick={() => setIsAdminDashboardOpen(false)}
-            className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-xs"
-          >
-            Đóng
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const handleCreateLesson = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-
-    addLesson({
-      moduleId: 'mod_custom',
-      moduleTitle,
-      title: title.trim(),
-      duration,
-      thumbnailUrl,
-      videoUrl,
-      isFreePreview,
-      price: Number(price),
+  const edit = (lesson: VideoLesson) => {
+    setEditingId(lesson.id);
+    setForm({
+      moduleTitle: lesson.moduleTitle, title: lesson.title, description: lesson.description,
+      duration: lesson.duration, thumbnailUrl: lesson.thumbnailUrl, sourceType: lesson.sourceType,
+      sourceUrl: lesson.sourceUrl ?? '', visibility: lesson.visibility, status: lesson.status,
+      isFreePreview: lesson.isFreePreview, price: lesson.price,
     });
-
-    setTitle('');
-    setSuccessMessage('Đã thêm video bài học mới thành công vào danh sách!');
-    setTimeout(() => setSuccessMessage(''), 3500);
   };
 
-  const handleAddAdmin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAdminEmail.trim()) return;
-
-    addAdminEmail(newAdminEmail.trim());
-    setAdminSuccessMsg(`Đã cấp quyền Admin thành công cho email: ${newAdminEmail.trim()}`);
-    setNewAdminEmail('');
-    setTimeout(() => setAdminSuccessMsg(''), 4000);
+  const submitMedia = async (event: React.FormEvent) => {
+    event.preventDefault(); setNotice(null);
+    if (form.title.trim().length < 2 || form.title.trim().length > 150) return setNotice({ type: 'error', text: 'Tiêu đề phải có từ 2 đến 150 ký tự.' });
+    if (form.description.length > 2000) return setNotice({ type: 'error', text: 'Mô tả tối đa 2.000 ký tự.' });
+    if (form.sourceUrl && !isSafeHttpsUrl(form.sourceUrl)) return setNotice({ type: 'error', text: 'URL nguồn phải dùng HTTPS hợp lệ.' });
+    if (form.sourceType !== 'unset' && form.sourceType !== 'future_storage' && !form.sourceUrl) return setNotice({ type: 'error', text: 'Nguồn đã chọn cần có URL.' });
+    setSaving(true);
+    const input = {
+      type: 'video' as const, moduleId: 'mod_custom', moduleTitle: form.moduleTitle.trim(), title: form.title.trim(),
+      description: form.description.trim(), duration: form.duration.trim(), thumbnailUrl: form.thumbnailUrl.trim(),
+      sourceType: form.sourceType, sourceUrl: form.sourceUrl.trim() || null, sourcePath: null,
+      visibility: form.visibility, status: form.status, isFreePreview: form.isFreePreview, price: Number(form.price),
+    };
+    try {
+      if (editingId) await editLesson(editingId, input); else await addLesson(input);
+      setForm(emptyForm); setEditingId(null);
+      setNotice({ type: 'success', text: editingId ? 'Đã cập nhật metadata video.' : 'Đã tạo metadata video.' });
+    } catch { setNotice({ type: 'error', text: 'Không thể lưu metadata. Vui lòng kiểm tra quyền và thử lại.' }); }
+    finally { setSaving(false); }
   };
 
-  const filteredComments = comments.filter((c) => {
-    if (commentFilter === 'all') return true;
-    return c.status === commentFilter;
-  });
+  const updateAccess = async (uid: string, role: UserRole, status: UserStatus) => {
+    try { await setUserAccess(uid, role, status); setNotice({ type: 'success', text: 'Đã cập nhật quyền người dùng.' }); }
+    catch { setNotice({ type: 'error', text: 'Không thể cập nhật quyền. Không được tự hạ quyền tài khoản đang dùng.' }); }
+  };
 
-  const pendingCount = comments.filter((c) => c.status === 'pending').length;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
-      <div className="relative w-full max-w-5xl bg-[#001848] border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden text-white my-auto flex flex-col max-h-[90vh]">
-        
-        {/* Top Bar */}
-        <div className="flex items-center justify-between p-4 bg-[#00266b] border-b border-amber-500/20 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="p-2 bg-amber-500/20 text-[#fabb15] border border-amber-500/40 rounded-xl">
-              <Video className="w-5 h-5" />
-            </span>
-            <div>
-              <h3 className="font-bold text-base text-white">Bảng Quản Trị Admin</h3>
-              <p className="text-[11px] text-blue-200">Quản lý upload video, duyệt bình luận & cấp quyền Admin</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setIsAdminDashboardOpen(false)}
-            className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-white/10 bg-black/20 flex-shrink-0 px-4 pt-3 gap-2 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('upload')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all flex-shrink-0 ${
-              activeTab === 'upload'
-                ? 'bg-[#001848] text-[#fabb15] border-t-2 border-x border-[#fabb15]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Upload className="w-4 h-4" />
-            <span>Upload & Quản Lý Video ({lessons.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('comments')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all flex-shrink-0 ${
-              activeTab === 'comments'
-                ? 'bg-[#001848] text-[#fabb15] border-t-2 border-x border-[#fabb15]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Duyệt Bình Luận</span>
-            {pendingCount > 0 && (
-              <span className="px-2 py-0.5 text-[10px] bg-red-600 text-white font-extrabold rounded-full animate-pulse">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('admins')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all flex-shrink-0 ${
-              activeTab === 'admins'
-                ? 'bg-[#001848] text-[#fabb15] border-t-2 border-x border-[#fabb15]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            <span>Quản Lý Admin ({adminEmails.length})</span>
-          </button>
-        </div>
-
-        {/* Scrollable Tab Content */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 bg-[#00143d]">
-          
-          {/* TAB 1: UPLOAD & MANAGING VIDEOS */}
-          {activeTab === 'upload' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Form Upload */}
-              <div className="lg:col-span-5 bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4">
-                <h4 className="text-sm font-bold text-[#fabb15] flex items-center gap-2 border-b border-white/10 pb-3">
-                  <PlusCircle className="w-4 h-4" />
-                  <span>Upload Bài Học Mới</span>
-                </h4>
-
-                {successMessage && (
-                  <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                    <span>{successMessage}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleCreateLesson} className="space-y-3 text-xs">
-                  <div>
-                    <label className="block text-gray-300 font-semibold mb-1">Tên Module</label>
-                    <input
-                      type="text"
-                      required
-                      value={moduleTitle}
-                      onChange={(e) => setModuleTitle(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#fabb15]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-300 font-semibold mb-1">Tiêu Đề Bài Học</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Bài 05: Thực Hành Layout Nâng Cao"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#fabb15]"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-gray-300 font-semibold mb-1">Thời Lượng</label>
-                      <div className="relative">
-                        <Clock className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                        <input
-                          type="text"
-                          required
-                          value={duration}
-                          onChange={(e) => setDuration(e.target.value)}
-                          placeholder="25:10"
-                          className="w-full pl-8 pr-2 py-2 bg-black/30 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#fabb15]"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-gray-300 font-semibold mb-1">Giá ($ USD)</label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={price}
-                          onChange={(e) => setPrice(parseFloat(e.target.value))}
-                          className="w-full pl-8 pr-2 py-2 bg-black/30 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#fabb15]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-300 font-semibold mb-1">URL Ảnh Thumbnail</label>
-                    <input
-                      type="text"
-                      required
-                      value={thumbnailUrl}
-                      onChange={(e) => setThumbnailUrl(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#fabb15]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-300 font-semibold mb-1">URL Video Stream</label>
-                    <input
-                      type="text"
-                      required
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#fabb15]"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="checkbox"
-                      id="freePreviewToggle"
-                      checked={isFreePreview}
-                      onChange={(e) => setIsFreePreview(e.target.checked)}
-                      className="w-4 h-4 rounded border-white/20 text-[#fabb15] focus:ring-0 accent-[#fabb15]"
-                    />
-                    <label htmlFor="freePreviewToggle" className="text-gray-200 font-semibold cursor-pointer">
-                      Cho phép xem thử miễn phí (Free Preview)
-                    </label>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 bg-[#fabb15] hover:bg-amber-400 text-[#001848] font-bold rounded-xl shadow-lg transition-colors mt-2"
-                  >
-                    Tải Bài Học Phổ Biến Lên
-                  </button>
-                </form>
-              </div>
-
-              {/* Existing Videos List */}
-              <div className="lg:col-span-7 bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4">
-                <h4 className="text-sm font-bold text-white flex items-center justify-between border-b border-white/10 pb-3">
-                  <span>Danh Sách Video Đã Upload ({lessons.length})</span>
-                  <span className="text-xs text-blue-200 font-normal">Quản lý & xóa bài học</span>
-                </h4>
-
-                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-                  {lessons.map((lesson) => (
-                    <div
-                      key={lesson.id}
-                      className="p-3 bg-black/20 rounded-xl border border-white/10 flex items-center gap-3 hover:border-white/20 transition-colors"
-                    >
-                      <img
-                        src={lesson.thumbnailUrl}
-                        alt={lesson.title}
-                        className="w-16 h-11 object-cover rounded-lg border border-white/20 flex-shrink-0"
-                      />
-
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-bold text-amber-400 block truncate">
-                          {lesson.moduleTitle}
-                        </span>
-                        <h5 className="text-xs font-bold text-white truncate">{lesson.title}</h5>
-                        <div className="flex items-center gap-2 text-[10px] text-gray-300 mt-0.5">
-                          <span>{lesson.duration}</span>
-                          <span>•</span>
-                          <span className={lesson.isFreePreview ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
-                            {lesson.isFreePreview ? 'Free Preview' : `$${lesson.price}`}
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => deleteLesson(lesson.id)}
-                        className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
-                        title="Xóa bài học"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 2: COMMENT MODERATION */}
-          {activeTab === 'comments' && (
-            <div className="space-y-4">
-              
-              {/* Comment Filter Buttons */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2">
-                  {(['pending', 'approved', 'rejected', 'all'] as const).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setCommentFilter(st)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all ${
-                        commentFilter === st
-                          ? 'bg-[#fabb15] text-[#001848]'
-                          : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                      }`}
-                    >
-                      {st === 'pending'
-                        ? `Chờ Duyệt (${comments.filter((c) => c.status === 'pending').length})`
-                        : st === 'approved'
-                        ? `Đã Duyệt (${comments.filter((c) => c.status === 'approved').length})`
-                        : st === 'rejected'
-                        ? `Từ Chối (${comments.filter((c) => c.status === 'rejected').length})`
-                        : `Tất Cả (${comments.length})`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Comment List */}
-              <div className="space-y-3">
-                {filteredComments.length === 0 ? (
-                  <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10 text-gray-400 text-xs">
-                    Không có bình luận nào trong danh mục này.
-                  </div>
-                ) : (
-                  filteredComments.map((cmt) => (
-                    <div
-                      key={cmt.id}
-                      className="p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                    >
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <img
-                          src={cmt.userAvatar}
-                          alt={cmt.userName}
-                          className="w-10 h-10 rounded-full border border-white/20 object-cover flex-shrink-0"
-                        />
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h5 className="text-xs font-bold text-white">{cmt.userName}</h5>
-                            <span className="text-[10px] text-gray-400">{cmt.createdAt}</span>
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                                cmt.status === 'approved'
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                  : cmt.status === 'pending'
-                                  ? 'bg-amber-500/20 text-[#fabb15] border border-amber-500/30'
-                                  : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                              }`}
-                            >
-                              {cmt.status}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-200">{cmt.content}</p>
-                        </div>
-                      </div>
-
-                      {/* Moderation Actions */}
-                      <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-                        {cmt.status !== 'approved' && (
-                          <button
-                            onClick={() => approveComment(cmt.id)}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1 transition-colors"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Duyệt</span>
-                          </button>
-                        )}
-
-                        {cmt.status !== 'rejected' && (
-                          <button
-                            onClick={() => rejectComment(cmt.id)}
-                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs transition-colors"
-                          >
-                            Từ chối
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => deleteComment(cmt.id)}
-                          className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
-                          title="Xóa bình luận"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 3: ADMIN MANAGEMENT */}
-          {activeTab === 'admins' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Form Add Admin Email */}
-              <div className="lg:col-span-5 bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4">
-                <h4 className="text-sm font-bold text-[#fabb15] flex items-center gap-2 border-b border-white/10 pb-3">
-                  <UserPlus className="w-4 h-4" />
-                  <span>Cấp Quyền Admin Mới</span>
-                </h4>
-
-                {adminSuccessMsg && (
-                  <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                    <span>{adminSuccessMsg}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleAddAdmin} className="space-y-3 text-xs">
-                  <div>
-                    <label className="block text-gray-300 font-semibold mb-1">Email Tài Khoản Admin Mới</label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="admin2@youtubemakemoneyww.com"
-                      value={newAdminEmail}
-                      onChange={(e) => setNewAdminEmail(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-white focus:outline-none focus:border-[#fabb15]"
-                    />
-                  </div>
-
-                  <p className="text-[11px] text-blue-200">
-                    💡 Khi email này đăng nhập vào hệ thống, tài khoản sẽ tự động được trao quyền Quản Trị (Admin).
-                  </p>
-
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 bg-[#fabb15] hover:bg-amber-400 text-[#001848] font-bold rounded-xl shadow-lg transition-colors mt-2"
-                  >
-                    Xác Nhận Cấp Quyền Admin
-                  </button>
-                </form>
-              </div>
-
-              {/* Authorized Admins List */}
-              <div className="lg:col-span-7 bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4">
-                <h4 className="text-sm font-bold text-white flex items-center justify-between border-b border-white/10 pb-3">
-                  <span>Danh Sách Email Có Quyền Admin ({adminEmails.length})</span>
-                  <span className="text-xs text-blue-200 font-normal">Quản lý quyền hạn</span>
-                </h4>
-
-                <div className="space-y-3">
-                  {adminEmails.map((email) => (
-                    <div
-                      key={email}
-                      className="p-3.5 bg-black/20 rounded-xl border border-white/10 flex items-center justify-between gap-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <UserCheck className="w-4 h-4 text-[#fabb15]" />
-                        <div>
-                          <h5 className="text-xs font-bold text-white">{email}</h5>
-                          <span className="text-[10px] text-emerald-400 font-bold uppercase">Role: Admin</span>
-                        </div>
-                      </div>
-
-                      {email !== 'ytbmmadmin@youtubemakemoneyww.com' && email !== 'admin@midas.com' ? (
-                        <button
-                          onClick={() => removeAdminEmail(email)}
-                          className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                          title="Hủy quyền Admin"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-amber-300 font-bold px-2 py-1 bg-amber-500/20 rounded-lg border border-amber-500/40">
-                          Super Admin
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          )}
-
-        </div>
-      </div>
+  const field = 'w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-white text-xs';
+  return <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 text-white">
+    <div className="w-full max-w-5xl bg-[#001848] rounded-2xl max-h-[92vh] overflow-y-auto border border-amber-500/30">
+      <header className="sticky top-0 z-10 flex justify-between p-4 bg-[#00266b] border-b border-white/10"><h3 className="font-bold flex gap-2"><Shield className="text-[#fabb15]" />Quản trị YMM</h3><button onClick={() => setIsAdminDashboardOpen(false)}><X /></button></header>
+      <nav className="flex gap-2 p-4 border-b border-white/10"><button onClick={() => setTab('media')} className={`px-4 py-2 rounded-xl ${tab === 'media' ? 'bg-[#fabb15] text-[#001848]' : 'bg-white/10'}`}><Video className="inline w-4 h-4 mr-2" />Media</button><button onClick={() => setTab('users')} className={`px-4 py-2 rounded-xl ${tab === 'users' ? 'bg-[#fabb15] text-[#001848]' : 'bg-white/10'}`}><Shield className="inline w-4 h-4 mr-2" />Người dùng</button></nav>
+      <main className="p-4 sm:p-6 space-y-4">
+        {notice && <div className={`p-3 rounded-xl text-xs flex gap-2 ${notice.type === 'success' ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>{notice.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}{notice.text}</div>}
+        {tab === 'media' ? <div className="grid lg:grid-cols-2 gap-6">
+          <form onSubmit={submitMedia} className="space-y-3 bg-white/5 p-4 rounded-2xl">
+            <h4 className="font-bold text-[#fabb15] flex gap-2"><PlusCircle className="w-4 h-4" />{editingId ? 'Sửa metadata video' : 'Thêm metadata video'}</h4>
+            <input className={field} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Tiêu đề" />
+            <textarea className={field} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Mô tả" />
+            <div className="grid grid-cols-2 gap-2"><input className={field} value={form.moduleTitle} onChange={(e) => setForm({ ...form, moduleTitle: e.target.value })} placeholder="Nhóm/module" /><input className={field} value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} placeholder="Thời lượng" /></div>
+            <input className={field} value={form.thumbnailUrl} onChange={(e) => setForm({ ...form, thumbnailUrl: e.target.value })} placeholder="Thumbnail HTTPS (không bắt buộc)" />
+            <div className="grid grid-cols-2 gap-2"><select className={field} value={form.sourceType} onChange={(e) => setForm({ ...form, sourceType: e.target.value as VideoSourceType })}>{['unset','external_url','youtube','vimeo','future_storage'].map((v) => <option key={v}>{v}</option>)}</select><input className={field} value={form.sourceUrl} onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })} placeholder="Source URL HTTPS" /></div>
+            <div className="grid grid-cols-2 gap-2"><select className={field} value={form.visibility} onChange={(e) => setForm({ ...form, visibility: e.target.value as MediaVisibility })}>{['private','authenticated','public'].map((v) => <option key={v}>{v}</option>)}</select><select className={field} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as MediaStatus })}>{['draft','published','archived'].map((v) => <option key={v}>{v}</option>)}</select></div>
+            <button disabled={saving} className="w-full py-2 bg-[#fabb15] text-[#001848] rounded-xl font-bold">{saving ? 'Đang lưu…' : editingId ? 'Lưu thay đổi' : 'Tạo metadata'}</button>
+            {editingId && <button type="button" onClick={() => { setEditingId(null); setForm(emptyForm); }} className="w-full text-xs text-blue-200">Hủy chỉnh sửa</button>}
+          </form>
+          <section className="space-y-3"><h4 className="font-bold">Media ({lessons.length})</h4>{mediaLoading ? <p>Đang tải…</p> : mediaError ? <p className="text-red-300">{mediaError}</p> : lessons.length === 0 ? <p className="text-blue-200">Chưa có media.</p> : lessons.map((lesson) => <article key={lesson.id} className="p-3 bg-white/5 rounded-xl flex justify-between gap-3"><div><p className="font-bold text-sm">{lesson.title}</p><p className="text-xs text-blue-200">{lesson.status} · {lesson.visibility} · {lesson.sourceType}</p></div><div className="flex gap-1"><button onClick={() => edit(lesson)} aria-label="Sửa"><Pencil className="w-4 h-4" /></button><button onClick={() => void deleteLesson(lesson.id).catch(() => setNotice({ type: 'error', text: 'Không thể xóa media.' }))} aria-label="Xóa"><Trash2 className="w-4 h-4 text-red-400" /></button></div></article>)}</section>
+        </div> : <section className="space-y-3">{users.length === 0 ? <p className="text-blue-200">Chưa có người dùng hoặc không thể tải dữ liệu.</p> : users.map((user) => <article key={user.id} className="p-3 bg-white/5 rounded-xl flex flex-wrap justify-between gap-3"><div><p className="font-bold text-sm">{user.name}</p><p className="text-xs text-blue-200">{user.email}</p></div><div className="flex gap-2"><select className={field} value={user.role} disabled={user.id === currentUser.id} onChange={(e) => void updateAccess(user.id, e.target.value as UserRole, user.status)}><option value="user">user</option><option value="admin">admin</option></select><select className={field} value={user.status} disabled={user.id === currentUser.id} onChange={(e) => void updateAccess(user.id, user.role, e.target.value as UserStatus)}><option value="active">active</option><option value="disabled">disabled</option></select></div></article>)}</section>}
+      </main>
     </div>
-  );
+  </div>;
 };

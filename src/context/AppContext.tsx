@@ -1,37 +1,57 @@
-import React, { createContext, useContext, useState } from 'react';
-import type { User, VideoLesson, Comment, PaymentOrder, UserRole } from '../types/app';
-import { landingData } from '../data/landingData';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import {
+  EmailAuthProvider,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  reauthenticateWithCredential,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+  updatePassword,
+  updateProfile,
+} from 'firebase/auth';
+import { auth } from '../config/firebase';
+import {
+  createMedia,
+  ensureUserProfile,
+  listAdminMedia,
+  listPublishedMedia,
+  listUsers,
+  removeMedia,
+  updateMedia,
+  updateUserAccess,
+  type MediaInput,
+} from '../services/firestore';
+import type { Comment, PaymentOrder, User, UserRole, UserStatus, VideoLesson } from '../types/app';
 
 interface AppContextType {
   currentUser: User | null;
-  setCurrentUser: (user: User | null) => void;
-  loginAsRole: (role: UserRole) => void;
-  logout: () => void;
-  
-  // Admin Management
-  adminEmails: string[];
-  addAdminEmail: (email: string) => void;
-  removeAdminEmail: (email: string) => void;
-  
-  // Videos & Lessons
+  authLoading: boolean;
+  authError: string | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  users: User[];
+  loadUsers: () => Promise<void>;
+  setUserAccess: (uid: string, role: UserRole, status: UserStatus) => Promise<void>;
   lessons: VideoLesson[];
-  addLesson: (lesson: Omit<VideoLesson, 'id'>) => void;
-  deleteLesson: (id: string) => void;
-  
-  // Comments
+  mediaLoading: boolean;
+  mediaError: string | null;
+  reloadMedia: () => Promise<void>;
+  addLesson: (lesson: MediaInput) => Promise<void>;
+  editLesson: (id: string, lesson: Partial<MediaInput>) => Promise<void>;
+  deleteLesson: (id: string) => Promise<void>;
   comments: Comment[];
   addComment: (lessonId: string, content: string) => void;
   approveComment: (commentId: string) => void;
   rejectComment: (commentId: string) => void;
   deleteComment: (commentId: string) => void;
-  
-  // Payments & Access
   purchasedLessonIds: string[];
   orders: PaymentOrder[];
   processPayPalPayment: (lesson: VideoLesson) => Promise<boolean>;
   hasAccessToLesson: (lesson: VideoLesson) => boolean;
-
-  // Active Modals & Selected Lesson
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   isAdminDashboardOpen: boolean;
@@ -42,230 +62,191 @@ interface AppContextType {
   setActivePayPalLesson: (lesson: VideoLesson | null) => void;
 }
 
-// Convert initial landingData modules into VideoLesson format
-const initialLessons: VideoLesson[] = landingData.courseModules.modules.flatMap((mod) =>
-  mod.lessons.map((les, index) => ({
-    id: les.id,
-    moduleId: mod.id,
-    moduleTitle: mod.title,
-    title: les.title,
-    duration: les.duration,
-    thumbnailUrl: les.thumbnailUrl,
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    isFreePreview: index === 0, // First lesson in module is free preview
-    price: 19.99,
-  }))
-);
-
-const DEMO_USER: User = {
-  id: 'usr_001',
-  name: 'Alex Student',
-  email: 'alex@example.com',
-  role: 'user',
-  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  purchasedLessonIds: [],
-};
-
-const DEMO_ADMIN: User = {
-  id: 'adm_001',
-  name: 'Midas Admin',
-  email: 'admin@midas.com',
-  role: 'admin',
-  avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-  purchasedLessonIds: initialLessons.map((l) => l.id), // Admin has access to all
-};
-
-const initialComments: Comment[] = [
-  {
-    id: 'cmt_1',
-    lessonId: initialLessons[0]?.id || 'mod1_les1',
-    userId: 'usr_999',
-    userName: 'Minh Tuấn',
-    userAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80',
-    content: 'Bài học rất hay và trực quan! Đã áp dụng được ngay vào workflow.',
-    createdAt: '2026-08-10 14:30',
-    status: 'approved',
-  },
-  {
-    id: 'cmt_2',
-    lessonId: initialLessons[0]?.id || 'mod1_les1',
-    userId: 'usr_888',
-    userName: 'Thanh Hương',
-    userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
-    content: 'Admin hỗ trợ giải đáp giúp em ở phút 05:20 với ạ!',
-    createdAt: '2026-08-11 09:15',
-    status: 'pending',
-  },
-];
-
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+function friendlyError(error: unknown): string {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  const messages: Record<string, string> = {
+    'auth/invalid-credential': 'Email hoặc mật khẩu không chính xác.',
+    'auth/email-already-in-use': 'Email này đã được đăng ký.',
+    'auth/invalid-email': 'Địa chỉ email không hợp lệ.',
+    'auth/weak-password': 'Mật khẩu chưa đủ mạnh.',
+    'auth/too-many-requests': 'Có quá nhiều yêu cầu. Vui lòng thử lại sau.',
+  };
+  return messages[code] ?? 'Không thể hoàn tất yêu cầu. Vui lòng thử lại.';
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // Default guest state for production
-  const [adminEmails, setAdminEmails] = useState<string[]>([
-    'ytbmmadmin@youtubemakemoneyww.com',
-    'admin@youtubemakemoneyww.com'
-  ]);
-  const [lessons, setLessons] = useState<VideoLesson[]>(initialLessons);
-  const [comments, setComments] = useState<Comment[]>(initialComments);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [lessons, setLessons] = useState<VideoLesson[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(true);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [purchasedLessonIds, setPurchasedLessonIds] = useState<string[]>([]);
   const [orders, setOrders] = useState<PaymentOrder[]>([]);
-
-  // Modals state
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
-  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [activeLesson, setActiveLesson] = useState<VideoLesson | null>(null);
   const [activePayPalLesson, setActivePayPalLesson] = useState<VideoLesson | null>(null);
 
-  const addAdminEmail = (email: string) => {
-    const formatted = email.trim().toLowerCase();
-    if (formatted && !adminEmails.includes(formatted)) {
-      setAdminEmails((prev) => [...prev, formatted]);
+  const reloadMedia = useCallback(async () => {
+    setMediaLoading(true);
+    setMediaError(null);
+    try {
+      const media = currentUser?.role === 'admin'
+        ? await listAdminMedia()
+        : await listPublishedMedia(Boolean(currentUser));
+      setLessons(media);
+    } catch {
+      setLessons([]);
+      setMediaError('Không thể tải danh sách video. Vui lòng thử lại.');
+    } finally {
+      setMediaLoading(false);
     }
-  };
+  }, [currentUser]);
 
-  const removeAdminEmail = (email: string) => {
-    const formatted = email.trim().toLowerCase();
-    // Super admin ytbmmadmin@youtubemakemoneyww.com cannot be removed
-    if (formatted === 'ytbmmadmin@youtubemakemoneyww.com') return;
-    setAdminEmails((prev) => prev.filter((e) => e !== formatted));
-  };
-
-  const loginAsRole = (role: UserRole) => {
-    if (role === 'admin') {
-      setCurrentUser(DEMO_ADMIN);
-    } else if (role === 'user') {
-      setCurrentUser(DEMO_USER);
-    } else {
-      setCurrentUser(null);
-    }
-  };
-
-  const logout = () => {
-    setCurrentUser(null);
-  };
-
-  const addLesson = (newLessonData: Omit<VideoLesson, 'id'>) => {
-    const newLesson: VideoLesson = {
-      ...newLessonData,
-      id: `les_${Date.now()}`,
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setAuthLoading(true);
+      setAuthError(null);
+      try {
+        if (!firebaseUser) {
+          if (active) setCurrentUser(null);
+          return;
+        }
+        const profile = await ensureUserProfile(firebaseUser);
+        if (profile.status === 'disabled') {
+          await signOut(auth);
+          throw new Error('ACCOUNT_DISABLED');
+        }
+        if (active) setCurrentUser(profile);
+      } catch (error) {
+        if (active) {
+          setCurrentUser(null);
+          setAuthError(error instanceof Error && error.message === 'ACCOUNT_DISABLED'
+            ? 'Tài khoản đã bị vô hiệu hóa.'
+            : 'Không thể tải hồ sơ tài khoản.');
+        }
+      } finally {
+        if (active) setAuthLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
     };
-    setLessons((prev) => [newLesson, ...prev]);
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading) void reloadMedia();
+  }, [authLoading, reloadMedia]);
+
+  const login = async (email: string, password: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (error) {
+      throw new Error(friendlyError(error));
+    }
   };
 
-  const deleteLesson = (id: string) => {
-    setLessons((prev) => prev.filter((l) => l.id !== id));
+  const register = async (name: string, email: string, password: string) => {
+    let accountCreated = false;
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      accountCreated = true;
+      await updateProfile(credential.user, { displayName: name.trim() });
+      const profile = await ensureUserProfile(credential.user, name);
+      setCurrentUser(profile);
+    } catch (error) {
+      if (accountCreated) {
+        await signOut(auth);
+        throw new Error('Tài khoản Firebase đã được tạo nhưng hồ sơ chưa lưu được. Hãy đăng nhập lại để hệ thống thử khôi phục hồ sơ.');
+      }
+      throw new Error(friendlyError(error));
+    }
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+    setCurrentUser(null);
+    setUsers([]);
+    setIsAdminDashboardOpen(false);
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser?.email) throw new Error('Bạn cần đăng nhập để đổi mật khẩu.');
+    try {
+      await reauthenticateWithCredential(firebaseUser, EmailAuthProvider.credential(firebaseUser.email, currentPassword));
+      await updatePassword(firebaseUser, newPassword);
+    } catch (error) {
+      throw new Error(friendlyError(error));
+    }
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    await sendPasswordResetEmail(auth, email.trim());
+  };
+
+  const loadUsers = useCallback(async () => setUsers(await listUsers()), []);
+  const setUserAccess = async (uid: string, role: UserRole, status: UserStatus) => {
+    await updateUserAccess(uid, role, status);
+    await loadUsers();
+  };
+
+  const addLesson = async (lesson: MediaInput) => {
+    if (!currentUser) throw new Error('Bạn cần đăng nhập.');
+    await createMedia(lesson, currentUser.id);
+    await reloadMedia();
+  };
+  const editLesson = async (id: string, lesson: Partial<MediaInput>) => {
+    await updateMedia(id, lesson);
+    await reloadMedia();
+  };
+  const deleteLesson = async (id: string) => {
+    await removeMedia(id);
+    await reloadMedia();
   };
 
   const addComment = (lessonId: string, content: string) => {
     if (!currentUser) return;
-    const newCmt: Comment = {
-      id: `cmt_${Date.now()}`,
-      lessonId,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      content,
-      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      status: currentUser.role === 'admin' ? 'approved' : 'pending', // Admin comments auto-approved
+    setComments((previous) => [{
+      id: crypto.randomUUID(), lessonId, userId: currentUser.id, userName: currentUser.name,
+      userAvatar: currentUser.avatar, content, createdAt: new Date().toISOString(), status: 'pending',
+    }, ...previous]);
+  };
+  const approveComment = (id: string) => setComments((items) => items.map((item) => item.id === id ? { ...item, status: 'approved' } : item));
+  const rejectComment = (id: string) => setComments((items) => items.map((item) => item.id === id ? { ...item, status: 'rejected' } : item));
+  const deleteComment = (id: string) => setComments((items) => items.filter((item) => item.id !== id));
+
+  const processPayPalPayment = async (lesson: VideoLesson) => {
+    const order: PaymentOrder = {
+      orderId: crypto.randomUUID(), userId: currentUser?.id ?? 'guest', lessonId: lesson.id,
+      lessonTitle: lesson.title, amount: lesson.price, currency: 'USD', status: 'COMPLETED', paidAt: new Date().toISOString(),
     };
-    setComments((prev) => [newCmt, ...prev]);
+    setOrders((items) => [order, ...items]);
+    setPurchasedLessonIds((items) => [...items, lesson.id]);
+    return true;
   };
+  const hasAccessToLesson = (lesson: VideoLesson) => lesson.visibility === 'public'
+    || lesson.isFreePreview || currentUser?.role === 'admin' || purchasedLessonIds.includes(lesson.id);
 
-  const approveComment = (commentId: string) => {
-    setComments((prev) =>
-      prev.map((c) => (c.id === commentId ? { ...c, status: 'approved' } : c))
-    );
-  };
-
-  const rejectComment = (commentId: string) => {
-    setComments((prev) =>
-      prev.map((c) => (c.id === commentId ? { ...c, status: 'rejected' } : c))
-    );
-  };
-
-  const deleteComment = (commentId: string) => {
-    setComments((prev) => prev.filter((c) => c.id !== commentId));
-  };
-
-  const processPayPalPayment = async (lesson: VideoLesson): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const order: PaymentOrder = {
-          orderId: `PAYPAL_${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
-          userId: currentUser?.id || 'guest_user',
-          lessonId: lesson.id,
-          lessonTitle: lesson.title,
-          amount: lesson.price,
-          currency: 'USD',
-          status: 'COMPLETED',
-          paidAt: new Date().toLocaleString(),
-        };
-
-        setOrders((prev) => [order, ...prev]);
-        setPurchasedLessonIds((prev) => [...prev, lesson.id]);
-        
-        if (currentUser) {
-          setCurrentUser({
-            ...currentUser,
-            purchasedLessonIds: [...currentUser.purchasedLessonIds, lesson.id],
-          });
-        }
-        
-        resolve(true);
-      }, 1200);
-    });
-  };
-
-  const hasAccessToLesson = (lesson: VideoLesson): boolean => {
-    if (lesson.isFreePreview) return true;
-    if (currentUser?.role === 'admin') return true;
-    if (purchasedLessonIds.includes(lesson.id)) return true;
-    if (currentUser?.purchasedLessonIds.includes(lesson.id)) return true;
-    return false;
-  };
-
-  return (
-    <AppContext.Provider
-      value={{
-        currentUser,
-        setCurrentUser,
-        loginAsRole,
-        logout,
-        adminEmails,
-        addAdminEmail,
-        removeAdminEmail,
-        lessons,
-        addLesson,
-        deleteLesson,
-        comments,
-        addComment,
-        approveComment,
-        rejectComment,
-        deleteComment,
-        purchasedLessonIds,
-        orders,
-        processPayPalPayment,
-        hasAccessToLesson,
-        isAuthModalOpen,
-        setIsAuthModalOpen,
-        isAdminDashboardOpen,
-        setIsAdminDashboardOpen,
-        activeLesson,
-        setActiveLesson,
-        activePayPalLesson,
-        setActivePayPalLesson,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
+  return <AppContext.Provider value={{
+    currentUser, authLoading, authError, login, register, logout, changePassword, requestPasswordReset,
+    users, loadUsers, setUserAccess, lessons, mediaLoading, mediaError, reloadMedia, addLesson, editLesson, deleteLesson,
+    comments, addComment, approveComment, rejectComment, deleteComment, purchasedLessonIds, orders,
+    processPayPalPayment, hasAccessToLesson, isAuthModalOpen, setIsAuthModalOpen, isAdminDashboardOpen,
+    setIsAdminDashboardOpen, activeLesson, setActiveLesson, activePayPalLesson, setActivePayPalLesson,
+  }}>{children}</AppContext.Provider>;
 };
 
+// oxlint-disable-next-line react/only-export-components -- colocated hook is the public context API
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+  if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
 };

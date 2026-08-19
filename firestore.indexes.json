@@ -1,0 +1,9 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "media", "fieldPath": "description", "indexes": [] },
+    { "collectionGroup": "media", "fieldPath": "sourceUrl", "indexes": [] },
+    { "collectionGroup": "media", "fieldPath": "sourcePath", "indexes": [] },
+    { "collectionGroup": "media", "fieldPath": "thumbnailUrl", "indexes": [] }
+  ]
+}
